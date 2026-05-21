@@ -31,6 +31,7 @@ class TestToolRegistration:
             "sf_update_record",
             "sf_delete_record",
             "sf_upsert_record",
+            "sf_bulk_operation",
         }
         assert set(mcp_with_tools.keys()) == expected
 

@@ -316,7 +316,7 @@ def register_tools(mcp):
     @mcp.tool()
     def pardot_query_visitor_activities(
         prospect_id: str = "",
-        type: str = "",
+        activity_type: str = "",
         created_after: str = "",
         created_before: str = "",
         campaign_id: str = "",
@@ -327,7 +327,7 @@ def register_tools(mcp):
 
         Args:
             prospect_id: Filter by prospect ID (empty for all).
-            type: Filter by numeric activity type. Common types: 3=form submission, 6=email sent, 11=email open, 12=email click, 35=unsubscribe, 36=hard bounce.
+            activity_type: Filter by numeric activity type. Common types: 3=form submission, 6=email sent, 11=email open, 12=email click, 35=unsubscribe, 36=hard bounce.
             created_after: ISO date filter, e.g. "2026-03-01". Maps to createdAtAfterOrEqualTo.
             created_before: ISO date filter, e.g. "2026-04-01". Maps to createdAtBefore.
             campaign_id: Filter by Pardot campaign ID.
@@ -341,8 +341,8 @@ def register_tools(mcp):
             params = {"fields": DEFAULT_VISITOR_ACTIVITY_FIELDS}
             if prospect_id:
                 params["prospectId"] = prospect_id
-            if type:
-                params["type"] = type
+            if activity_type:
+                params["type"] = activity_type
             if created_after:
                 params["createdAtAfterOrEqualTo"] = created_after
             if created_before:
