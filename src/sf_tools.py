@@ -4,6 +4,7 @@ from src.sf_client import (
     get_record, query, query_page,
     search, quick_search, get_limits, get_recent_items,
 )
+from src.sanitize import escape_soql
 from src.schema_cache import schema_cache
 from src.sf_schema import SCHEMA, OBJECT_NAMES
 from src.query_validator import validate_soql, enhance_sf_error
@@ -194,6 +195,75 @@ def register_tools(mcp):
             return get_limits()
         except Exception as e:
             return {"error": str(e)}
+
+    @mcp.tool()
+    def sf_find_by_email(email: str) -> dict:
+        """Find all Salesforce records for a person by email in one call.
+
+        Searches Contact, Account (Person Account), Lead, and TVRS_Guest__c
+        in parallel. Use this instead of sf_soql_query when looking up a
+        person by email — it's the standard person-resolution path and
+        handles Person Accounts whose name lives on Account.Name.
+
+        Args:
+            email: Email address to search for (case-insensitive).
+
+        Returns:
+            A dict with `contact`, `account`, `lead`, `tvrs_guests`, and `email`
+            keys. Each may be None / empty if no match. On per-object query
+            failure, the relevant key contains an `{"error": "..."}` dict and
+            the other lookups still proceed.
+        """
+        email_lower = (email or "").strip().lower()
+        if not email_lower:
+            return {"error": "email is required"}
+
+        escaped = escape_soql(email_lower)
+        result: dict = {"email": email_lower}
+
+        try:
+            contacts = query(
+                f"SELECT Id, FirstName, LastName, Email, AccountId, Phone, "
+                f"CreatedDate FROM Contact WHERE Email = '{escaped}' LIMIT 5"
+            )
+            result["contact"] = contacts[0] if contacts else None
+        except Exception as e:
+            result["contact"] = {"error": str(e)}
+
+        try:
+            accounts = query(
+                f"SELECT Id, Name, PersonEmail, PersonTitle, Website, "
+                f"Description, IsPersonAccount FROM Account "
+                f"WHERE PersonEmail = '{escaped}' AND IsPersonAccount = true LIMIT 5"
+            )
+            result["account"] = accounts[0] if accounts else None
+        except Exception as e:
+            result["account"] = {"error": str(e)}
+
+        try:
+            leads = query(
+                f"SELECT Id, FirstName, LastName, Email, Phone, Company, "
+                f"Status, IsConverted, ConvertedContactId, ConvertedAccountId "
+                f"FROM Lead WHERE Email = '{escaped}' "
+                f"AND IsConverted = false LIMIT 5"
+            )
+            result["lead"] = leads[0] if leads else None
+        except Exception as e:
+            result["lead"] = {"error": str(e)}
+
+        try:
+            tvrs_guests = query(
+                f"SELECT Id, Guest_First_Name__c, Guest_Last_Name__c, Email__c, "
+                f"Check_In_Date__c, Check_Out_Date__c, Villa_number__c, "
+                f"Contact__c FROM TVRS_Guest__c "
+                f"WHERE Email__c = '{escaped}' "
+                f"ORDER BY Check_In_Date__c DESC LIMIT 10"
+            )
+            result["tvrs_guests"] = tvrs_guests
+        except Exception as e:
+            result["tvrs_guests"] = {"error": str(e)}
+
+        return result
 
     @mcp.tool()
     def sf_recent_items(limit: int = 20) -> list[dict] | dict:
