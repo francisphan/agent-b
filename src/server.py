@@ -68,11 +68,13 @@ async def health(request):
 from src.sf_tools import register_tools as register_sf_tools  # noqa: E402
 from src.ns_tools import register_tools as register_ns_tools  # noqa: E402
 from src.pardot_tools import register_tools as register_pardot_tools  # noqa: E402
+from src.opera_tools import register_tools as register_opera_tools  # noqa: E402
 from src.cross_tools import register_tools as register_cross_tools  # noqa: E402
 
 register_sf_tools(mcp)
 register_ns_tools(mcp)
 register_pardot_tools(mcp)
+register_opera_tools(mcp)
 register_cross_tools(mcp)
 
 # Write tools — gated behind MCP_WRITE_TOKEN
@@ -124,6 +126,7 @@ def schema_cache_invalidate(key: str = "") -> dict:
 # ---------------------------------------------------------------------------
 from src.sf_schema import SCHEMA as SF_SCHEMA  # noqa: E402
 from src.ns_schema import SCHEMA as NS_SCHEMA  # noqa: E402
+from src.opera_schema import SCHEMA as OPERA_SCHEMA, GLOBAL_TIPS as OPERA_TIPS  # noqa: E402
 
 
 @mcp.resource("schema://salesforce")
@@ -162,6 +165,25 @@ def netsuite_record_resource(record_type: str) -> str:
     return json.dumps({"error": f"Record type '{record_type}' not found in curated schema."})
 
 
+@mcp.resource("schema://opera")
+def opera_schema_resource() -> str:
+    """Curated OPERA PMS Oracle schema — tables, fields, filters, and example SQL.
+
+    Covers: NAME, NAME_PHONE, NAME_ADDRESS, RESERVATION_NAME, RESERVATION_DAILY_ELEMENT_NAME,
+    RESERVATION_DAILY_ELEMENTS, NAME_COMMENT, NAME$NOTES, RESERVATION_COMMENT, RESERVATION_ALERTS.
+    """
+    return json.dumps({**OPERA_SCHEMA, "_tips": OPERA_TIPS}, indent=2)
+
+
+@mcp.resource("schema://opera/{table}")
+def opera_table_resource(table: str) -> str:
+    """Schema for a specific OPERA table (e.g. schema://opera/RESERVATION_NAME)."""
+    for name, schema in OPERA_SCHEMA.items():
+        if name.lower() == table.lower():
+            return json.dumps({name: schema}, indent=2)
+    return json.dumps({"error": f"Table '{table}' not found in curated OPERA schema."})
+
+
 @mcp.resource("guide://query-patterns")
 def query_patterns_resource() -> str:
     """Common query patterns and tips for Salesforce SOQL and NetSuite SuiteQL."""
@@ -187,7 +209,9 @@ def query_patterns_resource() -> str:
             "Use lookup_guest_by_email for quick cross-system existence checks",
             "Use guest_360_profile for a unified view with stay history + financials + marketing",
             "Email is the primary cross-system key (SF Email__c, NS email, Pardot email)",
+            "guest_360_profile pulls OPERA stay history when an OPERA NAME match is found by email",
         ],
+        "opera_sql_tips": OPERA_TIPS,
     }, indent=2)
 
 
@@ -254,6 +278,30 @@ def stale_opportunities() -> str:
         "Owner.Name, Account.Name FROM Opportunity "
         "WHERE IsClosed = false AND LastModifiedDate < LAST_N_DAYS:30 "
         "ORDER BY LastModifiedDate ASC LIMIT 20"
+    )
+
+
+@mcp.prompt()
+def opera_arrivals_today() -> str:
+    """Show OPERA arrivals at The Vines for today (Argentina time)."""
+    return (
+        "Show all guests checking in at The Vines today. "
+        "Call opera_list_arrivals with today's date in YYYY-MM-DD (America/Argentina/Buenos_Aires). "
+        "Group companion rows (parent_resv_name_id) under their primary booker and "
+        "summarize by villa with ETA."
+    )
+
+
+@mcp.prompt()
+def opera_guest_stay_history(email: str) -> str:
+    """Pull OPERA stay history for a guest by email."""
+    return (
+        f"Look up the OPERA stay history for '{email}'. "
+        "1) Call opera_search_profiles(email=...) to get NAME_ID. "
+        "2) For each match, call opera_get_stay_history(name_id=...) and "
+        "opera_get_profile_notes(name_id=...). "
+        "Summarize: total stays, last stay, favorite villa, any allergies/preferences "
+        "found in the profile notes."
     )
 
 

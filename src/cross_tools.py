@@ -4,6 +4,7 @@ from src.sanitize import escape_soql, escape_suiteql, validate_sf_id
 from src.sf_client import query as sf_query
 from src.ns_client import suiteql_query
 from src.pardot_client import query_prospects
+from src.opera_client import query as opera_query
 
 
 def lookup_guest(email: str) -> dict:
@@ -170,6 +171,40 @@ def guest_360(email: str) -> dict:
     except Exception as e:
         profile["_errors"] = profile.get("_errors", [])
         profile["_errors"].append(f"Pardot: {e}")
+
+    # --- OPERA PMS ---
+    try:
+        name_rows = opera_query(
+            "SELECT n.NAME_ID, n.FIRST, n.LAST, n.LANGUAGE "
+            "FROM OPERA.NAME n "
+            "JOIN OPERA.NAME_PHONE p ON n.NAME_ID = p.NAME_ID "
+            "WHERE p.PHONE_ROLE = 'EMAIL' AND p.PRIMARY_YN = 'Y' "
+            "AND LOWER(p.PHONE_NUMBER) = LOWER(:email) "
+            "AND n.NAME_TYPE = 'D'",
+            binds={"email": email_lower},
+            limit=5,
+        )
+        if name_rows:
+            name_id = name_rows[0]["name_id"]
+            profile["system_ids"]["opera_name_id"] = name_id
+            if not profile["identity"].get("first_name"):
+                profile["identity"]["first_name"] = name_rows[0].get("first")
+                profile["identity"]["last_name"] = name_rows[0].get("last")
+            stays = opera_query(
+                "SELECT rn.RESV_NAME_ID, "
+                "TO_CHAR(TRUNC(rn.BEGIN_DATE), 'YYYY-MM-DD') AS CHECK_IN, "
+                "TO_CHAR(TRUNC(rn.END_DATE),   'YYYY-MM-DD') AS CHECK_OUT, "
+                "rn.RESV_STATUS, rn.RATE_CODE, rn.MARKET_CODE, rn.SOURCE_CODE "
+                "FROM OPERA.RESERVATION_NAME rn "
+                "WHERE rn.RESORT = 'VINES' AND rn.NAME_ID = :name_id "
+                "ORDER BY rn.BEGIN_DATE DESC",
+                binds={"name_id": int(name_id)},
+                limit=100,
+            )
+            profile["stays_opera"] = stays
+    except Exception as e:
+        profile["_errors"] = profile.get("_errors", [])
+        profile["_errors"].append(f"OPERA: {e}")
 
     return profile
 
