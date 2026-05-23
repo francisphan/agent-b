@@ -157,6 +157,17 @@ class TestDomainRestriction:
         provider = make_provider(allowed_domain=None)
         assert provider.is_email_allowed("stranger@gmail.com", None)
 
+    def test_extras_bypass_domain_restriction(self):
+        provider = make_provider(extra_allowed_emails={"fs.phan@gmail.com"})
+        # Explicitly listed off-domain email is allowed despite the restriction
+        assert provider.is_email_allowed("fs.phan@gmail.com", None)
+        # And the restriction still bites for unrelated off-domain emails
+        assert not provider.is_email_allowed("stranger@gmail.com", None)
+
+    def test_extras_match_is_case_insensitive(self):
+        provider = make_provider(extra_allowed_emails={"fs.phan@gmail.com"})
+        assert provider.is_email_allowed("FS.Phan@Gmail.com", None)
+
 
 class TestScopeAssignment:
     def test_listed_email_gets_write(self):

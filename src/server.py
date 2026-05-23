@@ -36,12 +36,16 @@ def _build_oauth_provider() -> Optional[GoogleOAuthProvider]:
     write_emails = {
         e.strip() for e in os.getenv("OAUTH_WRITE_EMAILS", "").split(",") if e.strip()
     }
+    extra_allowed = {
+        e.strip() for e in os.getenv("OAUTH_EXTRA_ALLOWED_EMAILS", "").split(",") if e.strip()
+    }
     return GoogleOAuthProvider(
         google_client_id=client_id,
         google_client_secret=client_secret,
         public_url=public_url,
         signing_key=signing_key,
         allowed_domain=os.getenv("OAUTH_ALLOWED_DOMAIN") or None,
+        extra_allowed_emails=extra_allowed,
         write_emails=write_emails,
         static_read_token=READ_TOKEN,
         static_write_token=WRITE_TOKEN,

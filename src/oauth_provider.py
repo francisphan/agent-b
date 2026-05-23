@@ -66,6 +66,7 @@ class GoogleOAuthProvider(
         public_url: str,
         signing_key: str,
         allowed_domain: Optional[str] = None,
+        extra_allowed_emails: Optional[set[str]] = None,
         write_emails: Optional[set[str]] = None,
         static_read_token: Optional[str] = None,
         static_write_token: Optional[str] = None,
@@ -78,6 +79,9 @@ class GoogleOAuthProvider(
         self.public_url = public_url.rstrip("/")
         self.signing_key = signing_key
         self.allowed_domain = allowed_domain
+        self.extra_allowed_emails = {
+            e.strip().lower() for e in (extra_allowed_emails or set()) if e.strip()
+        }
         self.write_emails = {e.strip().lower() for e in (write_emails or set()) if e.strip()}
         self.static_read_token = static_read_token
         self.static_write_token = static_write_token
@@ -112,7 +116,11 @@ class GoogleOAuthProvider(
         return payload
 
     def is_email_allowed(self, email: str, domain_claim: Optional[str]) -> bool:
-        """Domain restriction: the Google ID token must come from our Workspace."""
+        """Allow if (a) no domain restriction, (b) domain matches via hd claim
+        or email suffix, or (c) the email is in the explicit extras list.
+        """
+        if email.lower() in self.extra_allowed_emails:
+            return True
         if not self.allowed_domain:
             return True
         if domain_claim and domain_claim.lower() == self.allowed_domain.lower():
