@@ -189,7 +189,11 @@ class GoogleOAuthProvider(
             "access_type": "online",
             "prompt": "select_account",
         }
-        if self.allowed_domain:
+        # Only hint `hd` to Google when nobody is on the off-domain escape
+        # hatch — otherwise Google hard-filters the account picker and those
+        # users get told their account "isn't allowed". The post-callback
+        # domain check (`is_email_allowed`) is the real enforcement either way.
+        if self.allowed_domain and not self.extra_allowed_emails:
             google_params["hd"] = self.allowed_domain
         return f"{GOOGLE_AUTH_URL}?{urlencode(google_params)}"
 

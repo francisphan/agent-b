@@ -211,6 +211,27 @@ class TestAuthorizeRedirect:
         # One pending record should be stashed for the callback to consume
         assert len(provider._pending) == 1
 
+    async def test_authorize_omits_hd_when_extras_present(self):
+        # If any email is on the off-domain escape hatch we cannot let Google
+        # hard-filter the account picker — otherwise those users get a
+        # "this account isn't allowed" error before our callback runs.
+        provider = make_provider(extra_allowed_emails={"fs.phan@gmail.com"})
+        client = OAuthClientInformationFull(
+            client_id="cli-1",
+            redirect_uris=[AnyUrl("http://localhost:33419/callback")],
+        )
+        from mcp.server.auth.provider import AuthorizationParams
+
+        params = AuthorizationParams(
+            state="x",
+            scopes=[READ_SCOPE],
+            code_challenge="ch",
+            redirect_uri=AnyUrl("http://localhost:33419/callback"),
+            redirect_uri_provided_explicitly=True,
+        )
+        url = await provider.authorize(client, params)
+        assert "hd=" not in url
+
 
 class TestPendingStateLifecycle:
     def test_pop_consumes_once(self):
