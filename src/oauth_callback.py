@@ -8,7 +8,7 @@ client back to its own ``redirect_uri``.
 
 from __future__ import annotations
 
-import logging
+import sys
 from urllib.parse import urlencode
 
 import httpx
@@ -23,8 +23,10 @@ from src.oauth_provider import (
     GoogleOAuthProvider,
 )
 
-logger = logging.getLogger("agent_b.oauth")
-logger.setLevel(logging.INFO)
+
+def _log(msg: str) -> None:
+    """Plain print so Railway captures it without logging config."""
+    print(f"[oauth] {msg}", file=sys.stderr, flush=True)
 
 _JWKS_CLIENT: jwt.PyJWKClient | None = None
 
@@ -37,7 +39,7 @@ def _jwks_client() -> jwt.PyJWKClient:
 
 
 def _error_redirect(redirect_uri: str, client_state: str | None, error: str, description: str) -> RedirectResponse:
-    logger.warning("OAuth callback failed: error=%s description=%s", error, description)
+    _log(f"REJECT error={error} description={description}")
     params = {"error": error, "error_description": description}
     if client_state:
         params["state"] = client_state
@@ -124,9 +126,10 @@ def make_oauth_callback_route(provider: GoogleOAuthProvider):
 
         email = id_claims["email"]
         if not provider.is_email_allowed(email, id_claims.get("hd")):
-            logger.warning(
-                "OAuth login rejected by allowlist: email=%r hd=%r allowed_domain=%r extras=%r",
-                email, id_claims.get("hd"), provider.allowed_domain, sorted(provider.extra_allowed_emails),
+            _log(
+                f"REJECT by allowlist: email={email!r} hd={id_claims.get('hd')!r} "
+                f"allowed_domain={provider.allowed_domain!r} "
+                f"extras={sorted(provider.extra_allowed_emails)}"
             )
             return _error_redirect(
                 client_redirect_uri,
@@ -136,7 +139,7 @@ def make_oauth_callback_route(provider: GoogleOAuthProvider):
             )
 
         scopes = provider.scopes_for_email(email)
-        logger.info("OAuth login accepted: email=%s scopes=%s", email, scopes)
+        _log(f"ACCEPT email={email} scopes={scopes}")
         internal_code = provider.issue_authorization_code(
             client_id=pending["client_id"],
             redirect_uri=AnyUrl(client_redirect_uri),
