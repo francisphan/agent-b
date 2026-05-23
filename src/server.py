@@ -3,46 +3,78 @@
 import hmac
 import json
 import os
+from typing import Optional
 
 from dotenv import load_dotenv
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
-from starlette.middleware import Middleware
+from pydantic import AnyHttpUrl
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from src.auth import AUTH_LEVEL, READ_TOKEN, WRITE_TOKEN
+from src.oauth_callback import make_oauth_callback_route
+from src.oauth_provider import GoogleOAuthProvider, READ_SCOPE
 
 load_dotenv()
 
 
+def _build_oauth_provider() -> Optional[GoogleOAuthProvider]:
+    """Construct the OAuth provider iff Google credentials are configured.
+
+    Falls back to None when any required env var is missing, which keeps the
+    legacy BearerAuthMiddleware path intact for local dev and existing
+    deployments.
+    """
+    client_id = os.getenv("OAUTH_GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("OAUTH_GOOGLE_CLIENT_SECRET")
+    public_url = os.getenv("OAUTH_PUBLIC_URL")
+    signing_key = os.getenv("OAUTH_SIGNING_KEY")
+    if not (client_id and client_secret and public_url and signing_key):
+        return None
+
+    write_emails = {
+        e.strip() for e in os.getenv("OAUTH_WRITE_EMAILS", "").split(",") if e.strip()
+    }
+    return GoogleOAuthProvider(
+        google_client_id=client_id,
+        google_client_secret=client_secret,
+        public_url=public_url,
+        signing_key=signing_key,
+        allowed_domain=os.getenv("OAUTH_ALLOWED_DOMAIN") or None,
+        write_emails=write_emails,
+        static_read_token=READ_TOKEN,
+        static_write_token=WRITE_TOKEN,
+    )
+
+
 class BearerAuthMiddleware(BaseHTTPMiddleware):
-    """Authenticate requests using bearer tokens.
+    """Static bearer-token auth — used only when OAuth is not configured.
 
-    - MCP_API_TOKEN  → read-only access (existing behaviour)
+    When OAuth IS configured the SDK's own bearer middleware takes over, and
+    ``GoogleOAuthProvider.load_access_token`` validates both OAuth-issued JWTs
+    and the same static tokens — so server-to-server consumers keep working
+    either way.
+
+    - MCP_API_TOKEN   → read-only access
     - MCP_WRITE_TOKEN → read + write access
-
-    If neither env var is set, all requests are allowed with write access
-    (for local development).
+    - Neither set     → all access permitted (local dev)
     """
 
     async def dispatch(self, request, call_next):
-        # Skip auth for health check
         if request.url.path == "/health":
             return await call_next(request)
 
-        # If no tokens configured, allow everything (local dev)
         if not READ_TOKEN and not WRITE_TOKEN:
             AUTH_LEVEL.set("write")
             return await call_next(request)
 
         bearer = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
 
-        # Check write token first (it grants superset of read access)
         if WRITE_TOKEN and hmac.compare_digest(bearer, WRITE_TOKEN):
             AUTH_LEVEL.set("write")
             return await call_next(request)
 
-        # Check read token
         if READ_TOKEN and hmac.compare_digest(bearer, READ_TOKEN):
             AUTH_LEVEL.set("read")
             return await call_next(request)
@@ -50,16 +82,38 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
 
-mcp = FastMCP(
-    "Agent B",
-    host=os.getenv("MCP_HOST", "0.0.0.0"),
-    port=int(os.getenv("MCP_PORT", "8000")),
-)
+_oauth_provider = _build_oauth_provider()
+
+_fastmcp_kwargs: dict = {
+    "host": os.getenv("MCP_HOST", "0.0.0.0"),
+    "port": int(os.getenv("MCP_PORT", "8000")),
+}
+if _oauth_provider is not None:
+    _issuer = AnyHttpUrl(_oauth_provider.public_url)
+    _fastmcp_kwargs["auth_server_provider"] = _oauth_provider
+    _fastmcp_kwargs["auth"] = AuthSettings(
+        issuer_url=_issuer,
+        resource_server_url=_issuer,
+        required_scopes=[READ_SCOPE],
+        client_registration_options=ClientRegistrationOptions(
+            enabled=True,
+            valid_scopes=[READ_SCOPE],
+            default_scopes=[READ_SCOPE],
+        ),
+    )
+
+mcp = FastMCP("Agent B", **_fastmcp_kwargs)
 
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health(request):
     return JSONResponse({"status": "ok"})
+
+
+if _oauth_provider is not None:
+    mcp.custom_route("/oauth/callback", methods=["GET"])(
+        make_oauth_callback_route(_oauth_provider)
+    )
 
 
 # ---------------------------------------------------------------------------
