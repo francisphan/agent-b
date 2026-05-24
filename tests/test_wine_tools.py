@@ -2,12 +2,17 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.wine_tools import (
+    _aging_months,
     _brand_variants,
     _find_wines,
     _normalize,
+    _parse_date,
     _redact_secrets,
     _score,
+    _winemaking_details,
     lookup_wine_owner,
     register_tools,
 )
@@ -156,6 +161,42 @@ OWNER_RECORD = {
     "custentity37": "Evans Vineyard", "custentity_vom_numberoflots": 2,
     "category": {"refName": "Ownership Group"}, "isInactive": False,
 }
+
+
+class TestWinemaking:
+    def test_parse_date_formats(self):
+        assert _parse_date("7/8/2020") == __import__("datetime").date(2020, 7, 8)
+        assert _parse_date("2020-11-11") == __import__("datetime").date(2020, 11, 11)
+        assert _parse_date("#N/A") is None
+        assert _parse_date(None) is None
+
+    def test_aging_months(self):
+        # 2020-07-08 → 2021-02-12 ≈ 219 days ≈ 7.2 months
+        assert _aging_months("7/8/2020", "2/12/2021") == pytest.approx(7.2, abs=0.2)
+        assert _aging_months("#N/A", "2/12/2021") is None  # unparseable
+        assert _aging_months("2/12/2021", "7/8/2020") is None  # bottled before blended
+
+    @patch("src.wine_tools.suiteql_query")
+    def test_winemaking_details_maps_and_computes(self, mock_q):
+        mock_q.return_value = [
+            {"vintage": "2019", "varietal": "Malbec", "wine_type": "Red",
+             "quality": "Super Premium", "blend": "100% MB", "abv": "14.8",
+             "barrel_name": "Dos Abogados", "new_oak_barrels": "1",
+             "blended": "7/8/2020", "bottled": "2/12/2021"},
+            {"vintage": "2020", "varietal": "Blend", "blended": "#N/A",
+             "bottled": "6/14/2022"},
+        ]
+        rows = _winemaking_details(647)
+        assert rows[0]["barrel_name"] == "Dos Abogados"
+        assert rows[0]["new_oak_barrels"] == "1"
+        assert rows[0]["aging_months_est"] == pytest.approx(7.2, abs=0.2)
+        assert rows[1]["aging_months_est"] is None  # bad date → no estimate
+
+    def test_winemaking_details_bad_customer_id_no_query(self):
+        with patch("src.wine_tools.suiteql_query") as mock_q:
+            assert _winemaking_details(None) == []
+            assert _winemaking_details("not-an-int") == []
+            mock_q.assert_not_called()
 
 
 class TestLookupWineOwner:

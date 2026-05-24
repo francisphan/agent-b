@@ -17,6 +17,7 @@ field map.
 
 from __future__ import annotations
 
+import datetime
 import re
 import unicodedata
 
@@ -258,9 +259,79 @@ def _find_wines(brand: str, owner_code: str | None = None) -> list[dict]:
     return wines
 
 
+def _parse_date(value):
+    """Parse a NetSuite date string (M/D/YYYY or YYYY-MM-DD) to a date, else None."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _aging_months(blended, bottled):
+    """Approx élevage in months between the blending session and bottling date."""
+    d1, d2 = _parse_date(blended), _parse_date(bottled)
+    if not d1 or not d2 or d2 < d1:
+        return None
+    return round((d2 - d1).days / 30.44, 1)
+
+
+def _winemaking_details(customer_id) -> list[dict]:
+    """Per-bottling winemaking detail for an owner (barrel, blend, ABV, aging).
+
+    Source: customrecord_vom_bottledetails, keyed to the owner via
+    custrecord_vom_bd_customer. The barrel-aging duration isn't a stored field —
+    it's approximated from the blending-session → bottling dates (an élevage
+    window). Fields are populated unevenly (manual entry), so values may be null.
+    """
+    try:
+        cid = int(customer_id)
+    except (TypeError, ValueError):
+        return []
+    rows = suiteql_query(
+        "SELECT custrecord_vom_bd_vintage AS vintage, "
+        "BUILTIN.DF(custrecord_vom_bd_varietal) AS varietal, "
+        "BUILTIN.DF(custrecord_vom_bd_winetype) AS wine_type, "
+        "BUILTIN.DF(custrecord_vom_bd_quality) AS quality, "
+        "custrecord_vom_bd_finalblend AS blend, "
+        "custrecord_vom_bd_labelalcohol AS abv, "
+        "custrecord_vom_bd_barrel_name AS barrel_name, "
+        "custrecord_vom_bd_no_1st_use_barrels AS new_oak_barrels, "
+        "custrecord_vom_bd_blendingsession AS blended, "
+        "custrecord_vom_bd_actbottlingdate AS bottled "
+        f"FROM customrecord_vom_bottledetails WHERE custrecord_vom_bd_customer = {cid} "
+        "ORDER BY custrecord_vom_bd_vintage DESC FETCH FIRST 50 ROWS ONLY"
+    )
+    out: list[dict] = []
+    for r in rows:
+        if not isinstance(r, dict) or "error" in r:
+            continue
+        out.append(
+            {
+                "vintage": r.get("vintage"),
+                "varietal": r.get("varietal"),
+                "wine_type": r.get("wine_type"),
+                "quality": r.get("quality"),
+                "blend": r.get("blend"),
+                "abv": r.get("abv"),
+                "barrel_name": r.get("barrel_name"),
+                "new_oak_barrels": r.get("new_oak_barrels"),
+                "blended_date": r.get("blended"),
+                "bottled_date": r.get("bottled"),
+                "aging_months_est": _aging_months(r.get("blended"), r.get("bottled")),
+            }
+        )
+    return out
+
+
 def lookup_wine_owner(
     label_text: str,
     include_inventory: bool = True,
+    include_winemaking: bool = True,
     enrich_guest_profile: bool = True,
 ) -> dict:
     """Resolve a bottle-label brand to its owner. Backs the wine_owner_lookup tool."""
@@ -270,6 +341,7 @@ def lookup_wine_owner(
         "owner": None,
         "alternates": [],
         "wines": [],
+        "winemaking": [],
         "guest_profile": None,
         "enrichment_status": "skipped",
     }
@@ -363,6 +435,14 @@ def lookup_wine_owner(
             result["wines"] = []
             result["inventory_error"] = str(e)
 
+    # 3b. Winemaking detail (barrel, blend, ABV, aging window) per bottling.
+    if include_winemaking:
+        try:
+            result["winemaking"] = _winemaking_details(owner.get("customer_id"))
+        except Exception as e:  # noqa: BLE001 — best-effort
+            result["winemaking"] = []
+            result["winemaking_error"] = str(e)
+
     # 4. Best-effort cross-system enrichment (in-house status, stays, money).
     email = owner.get("email")
     if enrich_guest_profile and email:
@@ -386,6 +466,7 @@ def register_tools(mcp):
     def wine_owner_lookup(
         label_text: str,
         include_inventory: bool = True,
+        include_winemaking: bool = True,
         enrich_guest_profile: bool = True,
     ) -> dict:
         """Identify the OWNER of an on-property wine from its bottle-label text.
@@ -393,7 +474,8 @@ def register_tools(mcp):
         Purpose-built for the restaurant sommelier: given the brand/name read off
         a wine label (e.g. "Dos Abogados", optionally with varietal/vintage), find
         whose wine it is and return their contact details, their wines + remaining
-        stock, and — best effort — whether they are currently in-house.
+        stock, the winemaking detail (barrels, blend, ABV, aging), and — best
+        effort — whether they are currently in-house.
 
         The authoritative key is the proprietary brand on the label, matched
         (accent-insensitive, multi-brand aware) against the owner's
@@ -406,6 +488,10 @@ def register_tools(mcp):
                 down-weighted automatically.
             include_inventory: Also return the owner's wine items and on-hand
                 quantity (default True).
+            include_winemaking: Also return per-bottling winemaking detail —
+                blend, ABV, barrel name + new-oak barrel count, and an estimated
+                aging window (months between blending and bottling). Fields are
+                manually entered so coverage is uneven (default True).
             enrich_guest_profile: Also attach the cross-system guest_360 profile
                 (stay history, in-house status, financials) when the owner has an
                 email. Best-effort — silently degrades to a NetSuite-only result
@@ -415,12 +501,15 @@ def register_tools(mcp):
             A dict with: match_status ('matched' | 'low_confidence' | 'ambiguous'
             | 'not_found'), match_confidence ('high'|'medium'|'low'), owner
             (contact + CRM summary; secrets in free-text notes are redacted),
-            alternates (other close brand matches), wines (inventory),
-            guest_profile (or null), and enrichment_status. On 'low_confidence' the
-            owner is a best guess — confirm with the user before asserting it.
+            alternates (other close brand matches), wines (inventory), winemaking
+            (per-bottling blend/ABV/barrel/aging — aging_months_est is an
+            approximation and may be null), guest_profile (or null), and
+            enrichment_status. On 'low_confidence' the owner is a best guess —
+            confirm with the user before asserting it.
         """
         return lookup_wine_owner(
             label_text,
             include_inventory=include_inventory,
+            include_winemaking=include_winemaking,
             enrich_guest_profile=enrich_guest_profile,
         )
