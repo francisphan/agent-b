@@ -61,6 +61,11 @@ def _redact_secrets(text):
     return _SECRET_RE.sub(_mask, text)
 
 
+# The Vines' packaging/label/sticker component SKUs are prefixed CT- (carton),
+# ET- (etiqueta/label), or ST- (sticker) — not finished wine bottles.
+_COMPONENT_SKU_RE = re.compile(r"(?i)^(?:ct|et|st)-")
+
+
 def _to_float(value) -> float:
     """Coerce a quantity to float, defaulting to 0.0 for None/non-numeric values."""
     try:
@@ -216,9 +221,12 @@ def _find_wines(brand: str, owner_code: str | None = None) -> list[dict]:
             key = str(int(r.get("id")))  # validate ids are integers before reuse
         except (TypeError, ValueError):
             continue
-        name = r.get("displayname") or r.get("itemid") or ""
-        if r.get("itemtype") != "Assembly" and _normalize(name) == brand_norm:
-            continue  # packaging/label component, not a wine
+        itemid = r.get("itemid") or ""
+        name = r.get("displayname") or itemid
+        if r.get("itemtype") != "Assembly" and (
+            _COMPONENT_SKU_RE.match(itemid) or _normalize(name) == brand_norm
+        ):
+            continue  # carton/label/sticker component, not a finished wine
         items[key] = {
             "item_id": r.get("id"),
             "name": name,

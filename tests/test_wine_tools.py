@@ -82,6 +82,32 @@ class TestFindWines:
             assert _find_wines("Reserva Malbec", None) == []
             mock_q.assert_not_called()
 
+    def test_drops_packaging_component_skus(self):
+        # CT-/ET-/ST- prefixed SKUs are carton/label/sticker components (incl. for
+        # the owner's OTHER brands), not finished wines — they must be dropped even
+        # when their displayname doesn't equal the queried brand.
+        def side_effect(query, *a, **k):
+            q = query.lower()
+            if "from item" in q:
+                return [
+                    {"id": "1", "itemid": "VTA3322-18 DOS ABOGADOS Malbec BF 2018 750ML",
+                     "displayname": None, "itemtype": "InvtPart"},
+                    {"id": "2", "itemid": "ET-MBRRBPR-CARD-01", "displayname": "Primrose",
+                     "itemtype": "InvtPart"},
+                    {"id": "3", "itemid": "CT-MBRRBPR-CARD-01", "displayname": "Primrose",
+                     "itemtype": "InvtPart"},
+                    {"id": "4", "itemid": "Dos Abogados SP Malbec", "displayname": None,
+                     "itemtype": "Assembly"},
+                ]
+            if "from inventorybalance" in q:
+                return [{"item": "1", "qavail": "264", "qoh": "264"}]
+            return []
+
+        with patch("src.wine_tools.suiteql_query", side_effect=side_effect):
+            wines = _find_wines("Dos Abogados", "CARD")
+        ids = {w["item_id"] for w in wines}
+        assert ids == {"1", "4"}  # VTA bottle + Assembly kept; ET-/CT- dropped
+
     def test_non_numeric_quantity_does_not_crash_sort(self):
         def side_effect(query, *a, **k):
             q = query.lower()
