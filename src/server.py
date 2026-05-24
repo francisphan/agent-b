@@ -128,12 +128,14 @@ from src.ns_tools import register_tools as register_ns_tools  # noqa: E402
 from src.pardot_tools import register_tools as register_pardot_tools  # noqa: E402
 from src.opera_tools import register_tools as register_opera_tools  # noqa: E402
 from src.cross_tools import register_tools as register_cross_tools  # noqa: E402
+from src.wine_tools import register_tools as register_wine_tools  # noqa: E402
 
 register_sf_tools(mcp)
 register_ns_tools(mcp)
 register_pardot_tools(mcp)
 register_opera_tools(mcp)
 register_cross_tools(mcp)
+register_wine_tools(mcp)
 
 # Write tools — gated behind MCP_WRITE_TOKEN
 from src.sf_write_tools import register_tools as register_sf_write_tools  # noqa: E402
