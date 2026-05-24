@@ -280,7 +280,48 @@ def _aging_months(blended, bottled):
     return round((d2 - d1).days / 30.44, 1)
 
 
-def _winemaking_details(customer_id) -> list[dict]:
+_BATCH_YEAR_RE = re.compile(r"(?:19|20)\d{2}")
+
+
+def _parse_batch_cooperage(batch_name: str):
+    """From a batch name like 'BA10228-CARD-19-63-2017-Boutes' return
+    (vintage, cooperage) — the 4-digit year and the trailing maker token after
+    it, if the name carries one (some batches have no cooperage suffix)."""
+    parts = [p.strip() for p in (batch_name or "").split("-")]
+    for i, p in enumerate(parts):
+        if _BATCH_YEAR_RE.fullmatch(p):
+            nxt = parts[i + 1] if i + 1 < len(parts) else ""
+            cooperage = nxt if nxt and not nxt.isdigit() else None
+            return p, cooperage
+    return None, None
+
+
+def _cooperages_by_vintage(owner_code) -> dict:
+    """Map vintage -> sorted cooperage makers used across the owner's batches.
+
+    The cooperage (Boutes, Seguin Moreau, Demptos, Brieve, ...) is only recorded
+    in the batch-name suffix, so we parse it from customrecord_ce_batch names
+    matched on the owner code. It's vintage-level (a year may span varietals).
+    """
+    code = re.sub(r"[^A-Za-z0-9]", "", owner_code or "").upper()
+    if len(code) < 3:
+        return {}
+    rows = suiteql_query(
+        "SELECT custrecord_ce_ba_batchname AS batch FROM customrecord_ce_batch "
+        f"WHERE UPPER(custrecord_ce_ba_batchname) LIKE '%-{code}-%' "
+        "FETCH FIRST 500 ROWS ONLY"
+    )
+    by_vintage: dict = {}
+    for r in rows:
+        if not isinstance(r, dict) or "error" in r:
+            continue
+        vintage, cooperage = _parse_batch_cooperage(r.get("batch") or "")
+        if vintage and cooperage:
+            by_vintage.setdefault(vintage, set()).add(cooperage)
+    return {v: sorted(cs) for v, cs in by_vintage.items()}
+
+
+def _winemaking_details(customer_id, owner_code=None) -> list[dict]:
     """Per-bottling winemaking detail for an owner (barrel, blend, ABV, aging).
 
     Source: customrecord_vom_bottledetails, keyed to the owner via
@@ -333,8 +374,20 @@ def _winemaking_details(customer_id) -> list[dict]:
                 "blended_date": r.get("blended"),
                 "bottled_date": r.get("bottled"),
                 "aging_months_est": _aging_months(r.get("blended"), r.get("bottled")),
+                "cooperages": [],
             }
         )
+
+    # Attach cooperage makers (from batch names) to Propio wines only — Tercero
+    # wines are aged off-site in the owner's own barrels, not from our batches.
+    if owner_code and any(row["production"] == "Propio" for row in out):
+        try:
+            coop_map = _cooperages_by_vintage(owner_code)
+        except Exception:  # noqa: BLE001 — cooperage is best-effort
+            coop_map = {}
+        for row in out:
+            if row["production"] == "Propio":
+                row["cooperages"] = coop_map.get(row["vintage"], [])
     return out
 
 
@@ -448,7 +501,9 @@ def lookup_wine_owner(
     # 3b. Winemaking detail (barrel, blend, ABV, aging window) per bottling.
     if include_winemaking:
         try:
-            result["winemaking"] = _winemaking_details(owner.get("customer_id"))
+            result["winemaking"] = _winemaking_details(
+                owner.get("customer_id"), owner.get("owner_code")
+            )
         except Exception as e:  # noqa: BLE001 — best-effort
             result["winemaking"] = []
             result["winemaking_error"] = str(e)
@@ -515,8 +570,9 @@ def register_tools(mcp):
             (per-bottling blend/ABV/barrel/aging — aging_months_est is an
             approximation and may be null; each row's `production` is "Propio"
             = made at The Vines, or "Tercero" = owner-made off-site from
-            property-grown grapes, so its detail is partial), guest_profile (or
-            null), and enrichment_status. On 'low_confidence' the owner is a best
+            property-grown grapes, so its detail is partial; Propio rows also
+            carry `cooperages`, the barrel makers used that vintage), guest_profile
+            (or null), and enrichment_status. On 'low_confidence' the owner is a best
             guess — confirm with the user before asserting it.
         """
         return lookup_wine_owner(
