@@ -180,16 +180,18 @@ class TestWinemaking:
     def test_winemaking_details_maps_and_computes(self, mock_q):
         mock_q.return_value = [
             {"vintage": "2019", "varietal": "Malbec", "wine_type": "Red",
-             "quality": "Super Premium", "blend": "100% MB", "abv": "14.8",
-             "barrel_name": "Dos Abogados", "new_oak_barrels": "1",
+             "quality": "Super Premium", "production": "Propio", "blend": "100% MB",
+             "abv": "14.8", "barrel_name": "Dos Abogados", "new_oak_barrels": "1",
              "blended": "7/8/2020", "bottled": "2/12/2021"},
-            {"vintage": "2020", "varietal": "Blend", "blended": "#N/A",
-             "bottled": "6/14/2022"},
+            {"vintage": "2020", "varietal": "Blend", "production": "Tercero",
+             "blended": "#N/A", "bottled": "6/14/2022"},
         ]
         rows = _winemaking_details(647)
         assert rows[0]["barrel_name"] == "Dos Abogados"
         assert rows[0]["new_oak_barrels"] == "1"
+        assert rows[0]["production"] == "Propio"
         assert rows[0]["aging_months_est"] == pytest.approx(7.2, abs=0.2)
+        assert rows[1]["production"] == "Tercero"  # owner-made off-site
         assert rows[1]["aging_months_est"] is None  # bad date → no estimate
 
     def test_winemaking_details_bad_customer_id_no_query(self):

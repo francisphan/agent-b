@@ -287,6 +287,12 @@ def _winemaking_details(customer_id) -> list[dict]:
     custrecord_vom_bd_customer. The barrel-aging duration isn't a stored field —
     it's approximated from the blending-session → bottling dates (an élevage
     window). Fields are populated unevenly (manual entry), so values may be null.
+
+    ``production`` reflects custrecord_vom_bd_terceropropio: "Propio" = the wine
+    was MADE at The Vines (our winemaking detail is authoritative); "Tercero" =
+    third-party — The Vines only grew the grapes and the owner harvested/made/aged
+    /bottled it in their own system, so any barrel/aging detail here is partial at
+    best. Absence of any rows likewise suggests an owner-managed wine.
     """
     try:
         cid = int(customer_id)
@@ -297,6 +303,7 @@ def _winemaking_details(customer_id) -> list[dict]:
         "BUILTIN.DF(custrecord_vom_bd_varietal) AS varietal, "
         "BUILTIN.DF(custrecord_vom_bd_winetype) AS wine_type, "
         "BUILTIN.DF(custrecord_vom_bd_quality) AS quality, "
+        "BUILTIN.DF(custrecord_vom_bd_terceropropio) AS production, "
         "custrecord_vom_bd_finalblend AS blend, "
         "custrecord_vom_bd_labelalcohol AS abv, "
         "custrecord_vom_bd_barrel_name AS barrel_name, "
@@ -316,6 +323,9 @@ def _winemaking_details(customer_id) -> list[dict]:
                 "varietal": r.get("varietal"),
                 "wine_type": r.get("wine_type"),
                 "quality": r.get("quality"),
+                # "Propio" = made at The Vines; "Tercero" = owner-made off-site
+                # (property-grown grapes only) → barrel/aging detail is partial.
+                "production": r.get("production"),
                 "blend": r.get("blend"),
                 "abv": r.get("abv"),
                 "barrel_name": r.get("barrel_name"),
@@ -503,9 +513,11 @@ def register_tools(mcp):
             (contact + CRM summary; secrets in free-text notes are redacted),
             alternates (other close brand matches), wines (inventory), winemaking
             (per-bottling blend/ABV/barrel/aging — aging_months_est is an
-            approximation and may be null), guest_profile (or null), and
-            enrichment_status. On 'low_confidence' the owner is a best guess —
-            confirm with the user before asserting it.
+            approximation and may be null; each row's `production` is "Propio"
+            = made at The Vines, or "Tercero" = owner-made off-site from
+            property-grown grapes, so its detail is partial), guest_profile (or
+            null), and enrichment_status. On 'low_confidence' the owner is a best
+            guess — confirm with the user before asserting it.
         """
         return lookup_wine_owner(
             label_text,
