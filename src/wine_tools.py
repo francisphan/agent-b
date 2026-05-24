@@ -329,11 +329,12 @@ def _winemaking_details(customer_id, owner_code=None) -> list[dict]:
     it's approximated from the blending-session → bottling dates (an élevage
     window). Fields are populated unevenly (manual entry), so values may be null.
 
-    ``production`` reflects custrecord_vom_bd_terceropropio: "Propio" = the wine
-    was MADE at The Vines (our winemaking detail is authoritative); "Tercero" =
-    third-party — The Vines only grew the grapes and the owner harvested/made/aged
-    /bottled it in their own system, so any barrel/aging detail here is partial at
-    best. Absence of any rows likewise suggests an owner-managed wine.
+    ``production`` is the raw custrecord_vom_bd_terceropropio flag ("Propio" /
+    "Tercero" = own / third-party). Its precise business meaning is NOT confirmed,
+    so don't infer where or by whom the wine was made from it. The blend/ABV/
+    barrel/aging fields come from our records regardless of the flag. Aging is
+    approximated from the blending-session → bottling dates (an élevage window,
+    not a verified time in barrel) and is null where those dates are blank.
     """
     try:
         cid = int(customer_id)
@@ -368,8 +369,8 @@ def _winemaking_details(customer_id, owner_code=None) -> list[dict]:
             "varietal": r.get("varietal"),
             "wine_type": r.get("wine_type"),
             "quality": r.get("quality"),
-            # "Propio" = made at The Vines; "Tercero" = owner-made off-site
-            # (property-grown grapes only) → barrel/aging detail is partial.
+            # Raw own/third-party flag; exact meaning unconfirmed — callers
+            # must not infer provenance from it.
             "production": r.get("production"),
             "blend": r.get("blend"),
             "abv": r.get("abv"),
@@ -392,8 +393,10 @@ def _winemaking_details(customer_id, owner_code=None) -> list[dict]:
                 kept[f] = v
     out = [by_key[k] for k in order][:40]
 
-    # Attach cooperage makers (from batch names) to Propio wines only — Tercero
-    # wines are aged off-site in the owner's own barrels, not from our batches.
+    # Attach cooperage makers (from this owner's batch names) to Propio rows only
+    # — a conservative choice while the meaning of Propio/Tercero is unconfirmed.
+    # It's a vintage-level association (the makers the owner used that year), not
+    # a verified per-bottling link.
     if owner_code and any(row["production"] == "Propio" for row in out):
         try:
             coop_map = _cooperages_by_vintage(owner_code)
@@ -581,12 +584,12 @@ def register_tools(mcp):
             | 'not_found'), match_confidence ('high'|'medium'|'low'), owner
             (contact + CRM summary; secrets in free-text notes are redacted),
             alternates (other close brand matches), wines (inventory), winemaking
-            (per-bottling blend/ABV/barrel/aging — aging_months_est is an
-            approximation and may be null; each row's `production` is "Propio"
-            = made at The Vines, or "Tercero" = owner-made off-site from
-            property-grown grapes, so its detail is partial; Propio rows also
-            carry `cooperages`, the barrel makers used that vintage), guest_profile
-            (or null), and enrichment_status. On 'low_confidence' the owner is a best
+            (per-bottling blend/ABV/barrel/aging — aging_months_est approximates a
+            blending→bottling window and may be null; `production` is the raw
+            own/third-party "Propio"/"Tercero" flag whose exact meaning is
+            unconfirmed, so don't infer provenance from it; Propio rows also carry
+            `cooperages`, the barrel makers used in that owner's batches that
+            vintage), guest_profile (or null), and enrichment_status. On 'low_confidence' the owner is a best
             guess — confirm with the user before asserting it.
         """
         return lookup_wine_owner(
