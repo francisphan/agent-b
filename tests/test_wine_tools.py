@@ -212,6 +212,24 @@ class TestWinemaking:
         assert rows[1]["production"] == "Tercero"
         assert rows[1]["cooperages"] == []
 
+    @patch("src.wine_tools.suiteql_query")
+    def test_winemaking_details_dedupes_and_backfills(self, mock_q):
+        # Same wine recorded twice (export lots); one row fills the dates the
+        # other left blank. Should collapse to ONE entry with the dates merged in.
+        mock_q.return_value = [
+            {"vintage": "2022", "varietal": "Malbec", "production": "Tercero",
+             "blend": "100% MB", "abv": "14", "blended": None, "bottled": None},
+            {"vintage": "2022", "varietal": "Malbec", "production": "Tercero",
+             "blend": "100% MB", "abv": "14", "blended": "7/27/2023",
+             "bottled": "2/27/2024"},
+            {"vintage": "2021", "varietal": "Malbec", "production": "Tercero",
+             "blend": "100% MB", "abv": "14.2", "blended": None, "bottled": None},
+        ]
+        rows = _winemaking_details(769)  # no owner_code → no cooperage query
+        assert len(rows) == 2  # two distinct wines (2022 + 2021)
+        m2022 = next(r for r in rows if r["vintage"] == "2022")
+        assert m2022["aging_months_est"] == pytest.approx(7.1, abs=0.3)  # backfilled
+
     def test_winemaking_details_bad_customer_id_no_query(self):
         with patch("src.wine_tools.suiteql_query") as mock_q:
             assert _winemaking_details(None) == []

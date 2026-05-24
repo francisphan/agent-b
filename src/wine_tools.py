@@ -352,31 +352,45 @@ def _winemaking_details(customer_id, owner_code=None) -> list[dict]:
         "custrecord_vom_bd_blendingsession AS blended, "
         "custrecord_vom_bd_actbottlingdate AS bottled "
         f"FROM customrecord_vom_bottledetails WHERE custrecord_vom_bd_customer = {cid} "
-        "ORDER BY custrecord_vom_bd_vintage DESC FETCH FIRST 50 ROWS ONLY"
+        "ORDER BY custrecord_vom_bd_vintage DESC FETCH FIRST 200 ROWS ONLY"
     )
-    out: list[dict] = []
+    # The same wine is recorded once per export lot, so rows are heavily
+    # duplicated. Collapse to DISTINCT wines (vintage/varietal/blend/production/
+    # ABV), merging in any field a duplicate fills that the kept row left blank,
+    # so older vintages aren't crowded out by repeats of recent ones.
+    by_key: dict = {}
+    order: list = []
     for r in rows:
         if not isinstance(r, dict) or "error" in r:
             continue
-        out.append(
-            {
-                "vintage": r.get("vintage"),
-                "varietal": r.get("varietal"),
-                "wine_type": r.get("wine_type"),
-                "quality": r.get("quality"),
-                # "Propio" = made at The Vines; "Tercero" = owner-made off-site
-                # (property-grown grapes only) → barrel/aging detail is partial.
-                "production": r.get("production"),
-                "blend": r.get("blend"),
-                "abv": r.get("abv"),
-                "barrel_name": r.get("barrel_name"),
-                "new_oak_barrels": r.get("new_oak_barrels"),
-                "blended_date": r.get("blended"),
-                "bottled_date": r.get("bottled"),
-                "aging_months_est": _aging_months(r.get("blended"), r.get("bottled")),
-                "cooperages": [],
-            }
-        )
+        entry = {
+            "vintage": r.get("vintage"),
+            "varietal": r.get("varietal"),
+            "wine_type": r.get("wine_type"),
+            "quality": r.get("quality"),
+            # "Propio" = made at The Vines; "Tercero" = owner-made off-site
+            # (property-grown grapes only) → barrel/aging detail is partial.
+            "production": r.get("production"),
+            "blend": r.get("blend"),
+            "abv": r.get("abv"),
+            "barrel_name": r.get("barrel_name"),
+            "new_oak_barrels": r.get("new_oak_barrels"),
+            "blended_date": r.get("blended"),
+            "bottled_date": r.get("bottled"),
+            "aging_months_est": _aging_months(r.get("blended"), r.get("bottled")),
+            "cooperages": [],
+        }
+        key = (entry["vintage"], entry["varietal"], entry["blend"],
+               entry["production"], entry["abv"])
+        kept = by_key.get(key)
+        if kept is None:
+            by_key[key] = entry
+            order.append(key)
+            continue
+        for f, v in entry.items():  # backfill blanks from the duplicate
+            if kept.get(f) in (None, "", []) and v not in (None, "", []):
+                kept[f] = v
+    out = [by_key[k] for k in order][:40]
 
     # Attach cooperage makers (from batch names) to Propio wines only — Tercero
     # wines are aged off-site in the owner's own barrels, not from our batches.
