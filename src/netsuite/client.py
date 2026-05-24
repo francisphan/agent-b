@@ -19,6 +19,9 @@ from .exceptions import (
 )
 from .models import NetSuiteConfig, NetSuiteErrorResponse
 
+# Verbs safe to retry after a transport fault that may have reached the server.
+_IDEMPOTENT_METHODS = {"GET", "HEAD", "OPTIONS"}
+
 
 class NetSuiteClient:
     """Unified client for NetSuite REST API, SuiteQL, and metadata.
@@ -62,12 +65,31 @@ class NetSuiteClient:
         extra_headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         headers = dict(extra_headers) if extra_headers else {}
-        last_exc: NetSuiteError | None = None
+        last_exc: Exception | None = None
 
         for attempt in range(self._config.max_retries + 1):
-            response = self._sync.request(
-                method, path, params=params, json=json, headers=headers
-            )
+            try:
+                response = self._sync.request(
+                    method, path, params=params, json=json, headers=headers
+                )
+            except httpx.TransportError as exc:
+                # Connect-phase faults never reached the server, so they're safe to
+                # retry for any verb. Other transport faults (e.g. read timeout)
+                # may have been received, so only retry idempotent methods to avoid
+                # double-applying a write.
+                connect_phase = isinstance(
+                    exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
+                )
+                retryable = connect_phase or method.upper() in _IDEMPOTENT_METHODS
+                if retryable and attempt < self._config.max_retries:
+                    wait = calculate_backoff(
+                        attempt, None, self._config.retry_backoff_factor
+                    )
+                    time.sleep(wait)
+                    last_exc = exc
+                    continue
+                raise
+
             if response.status_code < 400:
                 if response.status_code == 204 or not response.content:
                     return {}
