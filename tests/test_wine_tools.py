@@ -9,6 +9,7 @@ from src.wine_tools import (
     _brand_variants,
     _find_wines,
     _normalize,
+    _parse_batch_cooperage,
     _parse_date,
     _redact_secrets,
     _score,
@@ -176,23 +177,40 @@ class TestWinemaking:
         assert _aging_months("#N/A", "2/12/2021") is None  # unparseable
         assert _aging_months("2/12/2021", "7/8/2020") is None  # bottled before blended
 
+    def test_parse_batch_cooperage(self):
+        assert _parse_batch_cooperage("BA10228-CARD-19-63-2017-Boutes") == ("2017", "Boutes")
+        assert _parse_batch_cooperage("BA10410-CARD-19-111-2017-Seguin Moreaux") == (
+            "2017", "Seguin Moreaux")
+        assert _parse_batch_cooperage("BA10869-CARD-2020") == ("2020", None)
+        assert _parse_batch_cooperage("BA10903-CARD-2018-06") == ("2018", None)
+        assert _parse_batch_cooperage("") == (None, None)
+
     @patch("src.wine_tools.suiteql_query")
-    def test_winemaking_details_maps_and_computes(self, mock_q):
-        mock_q.return_value = [
-            {"vintage": "2019", "varietal": "Malbec", "wine_type": "Red",
-             "quality": "Super Premium", "production": "Propio", "blend": "100% MB",
-             "abv": "14.8", "barrel_name": "Dos Abogados", "new_oak_barrels": "1",
-             "blended": "7/8/2020", "bottled": "2/12/2021"},
-            {"vintage": "2020", "varietal": "Blend", "production": "Tercero",
-             "blended": "#N/A", "bottled": "6/14/2022"},
-        ]
-        rows = _winemaking_details(647)
-        assert rows[0]["barrel_name"] == "Dos Abogados"
-        assert rows[0]["new_oak_barrels"] == "1"
+    def test_winemaking_details_maps_and_joins_cooperage(self, mock_q):
+        def side_effect(query, *a, **k):
+            if "customrecord_ce_batch" in query:
+                return [{"batch": "BA1-CARD-19-1-2019-Boutes"},
+                        {"batch": "BA2-CARD-19-2-2019-Brieve"},
+                        {"batch": "BA3-CARD-19-3-2020-Demptos"}]
+            return [
+                {"vintage": "2019", "varietal": "Malbec", "wine_type": "Red",
+                 "quality": "Super Premium", "production": "Propio", "blend": "100% MB",
+                 "abv": "14.8", "barrel_name": "Dos Abogados", "new_oak_barrels": "1",
+                 "blended": "7/8/2020", "bottled": "2/12/2021"},
+                {"vintage": "2020", "varietal": "Blend", "production": "Tercero",
+                 "blended": "#N/A", "bottled": "6/14/2022"},
+            ]
+
+        mock_q.side_effect = side_effect
+        rows = _winemaking_details(647, "CARD")
+
         assert rows[0]["production"] == "Propio"
         assert rows[0]["aging_months_est"] == pytest.approx(7.2, abs=0.2)
-        assert rows[1]["production"] == "Tercero"  # owner-made off-site
-        assert rows[1]["aging_months_est"] is None  # bad date → no estimate
+        # Propio 2019 wine gets the makers used that vintage.
+        assert rows[0]["cooperages"] == ["Boutes", "Brieve"]
+        # Tercero wine (owner-made off-site) gets NO cooperage from our batches.
+        assert rows[1]["production"] == "Tercero"
+        assert rows[1]["cooperages"] == []
 
     def test_winemaking_details_bad_customer_id_no_query(self):
         with patch("src.wine_tools.suiteql_query") as mock_q:
