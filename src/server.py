@@ -12,7 +12,7 @@ from pydantic import AnyHttpUrl
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from src.auth import AUTH_LEVEL, READ_TOKEN, WRITE_TOKEN
+from src.auth import ALLOW_INSECURE_NO_AUTH, AUTH_LEVEL, READ_TOKEN, WRITE_TOKEN
 from src.oauth_callback import make_oauth_callback_route
 from src.oauth_provider import GoogleOAuthProvider, READ_SCOPE
 
@@ -62,7 +62,8 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
 
     - MCP_API_TOKEN   → read-only access
     - MCP_WRITE_TOKEN → read + write access
-    - Neither set     → all access permitted (local dev)
+    - Neither set     → denied (503), unless MCP_ALLOW_INSECURE_NO_AUTH is set
+                        to explicitly opt into a fully-open local-dev server.
     """
 
     async def dispatch(self, request, call_next):
@@ -70,8 +71,14 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if not READ_TOKEN and not WRITE_TOKEN:
-            AUTH_LEVEL.set("write")
-            return await call_next(request)
+            # Fail CLOSED on a misconfigured deploy. Full-open access is only
+            # granted when the operator explicitly opts in for local dev.
+            if ALLOW_INSECURE_NO_AUTH:
+                AUTH_LEVEL.set("write")
+                return await call_next(request)
+            return JSONResponse(
+                {"error": "Server authentication is not configured."}, status_code=503
+            )
 
         bearer = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
 

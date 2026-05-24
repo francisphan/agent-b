@@ -20,6 +20,15 @@ AUTH_LEVEL: ContextVar[str] = ContextVar("auth_level", default="none")
 READ_TOKEN = os.getenv("MCP_API_TOKEN")
 WRITE_TOKEN = os.getenv("MCP_WRITE_TOKEN")
 
+# Explicit, loud opt-in for running with NO authentication (local dev only).
+# Without this, a deployment that is missing both OAuth config and static tokens
+# refuses to start rather than silently exposing data on a 0.0.0.0 bind.
+ALLOW_INSECURE_NO_AUTH = os.getenv("MCP_ALLOW_INSECURE_NO_AUTH", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 
 def _has_oauth_write_scope() -> bool:
     """Check the SDK-managed auth context for the write scope.
