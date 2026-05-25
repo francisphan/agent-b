@@ -94,6 +94,19 @@ def _tokens(value: str, *, drop_stopwords: bool = True) -> set[str]:
     return toks
 
 
+def _contains_as_words(haystack: str, needle: str) -> bool:
+    """True if `needle` appears in `haystack` on word boundaries.
+
+    Both args are pre-``_normalize``d to space-separated [a-z0-9]. Unlike a raw
+    substring test, this won't fire when the needle is buried inside a longer
+    word — so a 2-letter brand like "RA" can't masquerade as a full-brand match
+    inside unrelated labels ("g​ra​cias", "te​ra​zas").
+    """
+    if not needle:
+        return False
+    return re.search(rf"(?<![a-z0-9]){re.escape(needle)}(?![a-z0-9])", haystack) is not None
+
+
 def _brand_variants(brand_field: str) -> list[str]:
     """Split a possibly multi-valued brand field into individual brand names."""
     variants = [v.strip() for v in _BRAND_SPLIT.split(brand_field) if v.strip()]
@@ -127,10 +140,13 @@ def _score(query: str, brand_field: str) -> float:
 
         score = 0.0
         # Directional containment: the WHOLE brand appearing in the label (plus
-        # varietal/vintage extras) is a strong signal. The label being only a
-        # FRAGMENT of a larger brand is weaker, scaled by how much it covers — so
-        # a single common word ("Smith") can't masquerade as a confident match.
-        if v_norm in q_norm:
+        # varietal/vintage extras) is a strong signal — but the brand must appear
+        # on WORD boundaries, not buried inside a longer word, or a 2-letter brand
+        # like "RA" would match almost any label ("g​ra​cias"). The label being
+        # only a FRAGMENT of a larger brand is weaker, scaled by how much it covers
+        # (kept as a raw substring so OCR-noisy partial reads still rank their
+        # owner) — so a single common word ("Smith") can't masquerade as a match.
+        if _contains_as_words(q_norm, v_norm):
             score = 0.9
         elif q_norm in v_norm:
             score = 0.5 + 0.4 * (len(q_norm) / len(v_norm))
