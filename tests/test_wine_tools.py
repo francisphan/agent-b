@@ -64,6 +64,19 @@ class TestNormalizeAndScore:
         # NOT score as a confident match (>=0.7 would trip "matched").
         assert _score("Smith", "Smith Family Estate") < 0.7
 
+    def test_short_brand_does_not_match_inside_words(self):
+        # Reinaldo Assunção's brand field is the placeholder "RA". The letters
+        # "ra" appear inside countless real labels, but a buried substring must
+        # NOT score — otherwise "RA" wins nearly every lookup. (regression)
+        assert _score("Gracias a la Vida", "RA") == 0.0
+        assert _score("Gran Espetaculo", "RA") == 0.0
+        assert _score("Terreno Alto", "RA") == 0.0
+
+    def test_short_brand_still_matches_as_a_word(self):
+        # When the brand genuinely appears as a standalone token on the label,
+        # the strong full-brand signal should still fire.
+        assert _score("RA Malbec 2019", "RA") >= 0.9
+
 
 class TestRedactSecrets:
     def test_masks_password_like_values(self):
