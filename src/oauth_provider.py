@@ -12,6 +12,7 @@ OAuth is enabled.
 from __future__ import annotations
 
 import hmac
+import json
 import secrets
 import time
 from typing import Optional
@@ -28,12 +29,18 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import AnyUrl
 
+from src.oauth_store import OAuthStore, build_oauth_store
+
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 — public URL, not a secret
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 
 ACCESS_TOKEN_TTL_SEC = 60 * 60
-REFRESH_TOKEN_TTL_SEC = 60 * 60 * 24 * 30
+# Effectively "never expire" so an idle Claude Desktop connection doesn't get
+# kicked back to a full re-auth. The token still rotates on every refresh, and
+# revocation/scope changes take effect at the next refresh — this only governs
+# how long an *unused* connection survives. Dial back here if that policy tightens.
+REFRESH_TOKEN_TTL_SEC = 60 * 60 * 24 * 365 * 10
 AUTH_CODE_TTL_SEC = 60
 PENDING_AUTH_TTL_SEC = 60 * 10
 JWT_AUDIENCE = "agent-b"
@@ -41,6 +48,13 @@ JWT_ALGORITHM = "HS256"
 
 READ_SCOPE = "agent-b:read"
 WRITE_SCOPE = "agent-b:write"
+
+# Key prefixes in the shared store, namespaced so Redis can be reused for other
+# things without collisions.
+_CLIENT_PREFIX = "agentb:oauth:client:"
+_REFRESH_PREFIX = "agentb:oauth:refresh:"  # noqa: S105 — key prefix, not a secret
+_AUTHCODE_PREFIX = "agentb:oauth:authcode:"
+_PENDING_PREFIX = "agentb:oauth:pending:"
 
 
 def _now() -> int:
@@ -70,6 +84,7 @@ class GoogleOAuthProvider(
         write_emails: Optional[set[str]] = None,
         static_read_token: Optional[str] = None,
         static_write_token: Optional[str] = None,
+        store: Optional[OAuthStore] = None,
     ):
         if len(signing_key) < 32:
             raise ValueError("OAUTH_SIGNING_KEY must be at least 32 characters")
@@ -86,12 +101,10 @@ class GoogleOAuthProvider(
         self.static_read_token = static_read_token
         self.static_write_token = static_write_token
 
-        self._clients: dict[str, OAuthClientInformationFull] = {}
-        self._auth_codes: dict[str, AuthorizationCodeWithEmail] = {}
-        # state token issued to Google -> data needed to resume the client's flow
-        self._pending: dict[str, dict] = {}
-        # refresh_token -> (client_id, email, scopes, expires_at)
-        self._refresh: dict[str, dict] = {}
+        # Registered DCR clients, refresh tokens, authorization codes, and
+        # pending-auth handles all live here so they survive restarts. Redis
+        # when REDIS_URL is set, otherwise process-local (see oauth_store).
+        self._store: OAuthStore = store or build_oauth_store()
 
     @property
     def callback_url(self) -> str:
@@ -101,17 +114,18 @@ class GoogleOAuthProvider(
     # Helpers used by the /oauth/callback Starlette route
     # -----------------------------------------------------------------
 
-    def stash_pending(self, state: str, payload: dict) -> None:
-        cutoff = _now() - PENDING_AUTH_TTL_SEC
-        for k in list(self._pending):
-            if self._pending[k].get("created_at", 0) < cutoff:
-                self._pending.pop(k, None)
+    async def stash_pending(self, state: str, payload: dict) -> None:
         payload["created_at"] = _now()
-        self._pending[state] = payload
+        await self._store.set(
+            _PENDING_PREFIX + state, json.dumps(payload), ttl_seconds=PENDING_AUTH_TTL_SEC
+        )
 
-    def pop_pending(self, state: str) -> Optional[dict]:
-        payload = self._pending.pop(state, None)
-        if payload and payload.get("created_at", 0) < _now() - PENDING_AUTH_TTL_SEC:
+    async def pop_pending(self, state: str) -> Optional[dict]:
+        raw = await self._store.getdel(_PENDING_PREFIX + state)
+        if not raw:
+            return None
+        payload = json.loads(raw)
+        if payload.get("created_at", 0) < _now() - PENDING_AUTH_TTL_SEC:
             return None
         return payload
 
@@ -132,7 +146,7 @@ class GoogleOAuthProvider(
             return [READ_SCOPE, WRITE_SCOPE]
         return [READ_SCOPE]
 
-    def issue_authorization_code(
+    async def issue_authorization_code(
         self,
         *,
         client_id: str,
@@ -143,7 +157,7 @@ class GoogleOAuthProvider(
         email: str,
     ) -> str:
         code_str = secrets.token_urlsafe(48)
-        self._auth_codes[code_str] = AuthorizationCodeWithEmail(
+        code = AuthorizationCodeWithEmail(
             code=code_str,
             scopes=scopes,
             expires_at=_now() + AUTH_CODE_TTL_SEC,
@@ -153,6 +167,9 @@ class GoogleOAuthProvider(
             redirect_uri_provided_explicitly=redirect_uri_provided_explicitly,
             email=email,
         )
+        await self._store.set(
+            _AUTHCODE_PREFIX + code_str, code.model_dump_json(), ttl_seconds=AUTH_CODE_TTL_SEC
+        )
         return code_str
 
     # -----------------------------------------------------------------
@@ -160,16 +177,23 @@ class GoogleOAuthProvider(
     # -----------------------------------------------------------------
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
-        return self._clients.get(client_id)
+        raw = await self._store.get(_CLIENT_PREFIX + client_id)
+        if not raw:
+            return None
+        return OAuthClientInformationFull.model_validate_json(raw)
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        self._clients[client_info.client_id] = client_info
+        # DCR clients persist indefinitely so a reconnecting Claude Desktop can
+        # reuse its client_id across deploys instead of re-registering.
+        await self._store.set(
+            _CLIENT_PREFIX + client_info.client_id, client_info.model_dump_json()
+        )
 
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> str:
         state = secrets.token_urlsafe(32)
-        self.stash_pending(
+        await self.stash_pending(
             state,
             {
                 "client_id": client.client_id,
@@ -200,11 +224,12 @@ class GoogleOAuthProvider(
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
     ) -> AuthorizationCodeWithEmail | None:
-        code = self._auth_codes.get(authorization_code)
-        if not code:
+        raw = await self._store.get(_AUTHCODE_PREFIX + authorization_code)
+        if not raw:
             return None
+        code = AuthorizationCodeWithEmail.model_validate_json(raw)
         if code.expires_at < _now():
-            self._auth_codes.pop(authorization_code, None)
+            await self._store.delete(_AUTHCODE_PREFIX + authorization_code)
             return None
         if code.client_id != client.client_id:
             return None
@@ -215,8 +240,8 @@ class GoogleOAuthProvider(
         client: OAuthClientInformationFull,
         authorization_code: AuthorizationCodeWithEmail,
     ) -> OAuthToken:
-        self._auth_codes.pop(authorization_code.code, None)
-        return self._mint_token_pair(
+        await self._store.delete(_AUTHCODE_PREFIX + authorization_code.code)
+        return await self._mint_token_pair(
             client_id=client.client_id,
             email=authorization_code.email,
             scopes=authorization_code.scopes,
@@ -225,11 +250,12 @@ class GoogleOAuthProvider(
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
     ) -> object | None:
-        rt = self._refresh.get(refresh_token)
-        if not rt:
+        raw = await self._store.get(_REFRESH_PREFIX + refresh_token)
+        if not raw:
             return None
+        rt = json.loads(raw)
         if rt["expires_at"] < _now():
-            self._refresh.pop(refresh_token, None)
+            await self._store.delete(_REFRESH_PREFIX + refresh_token)
             return None
         if rt["client_id"] != client.client_id:
             return None
@@ -251,13 +277,15 @@ class GoogleOAuthProvider(
         scopes: list[str],
     ) -> OAuthToken:
         token_str = refresh_token.token
-        record = self._refresh.pop(token_str, None)
-        if not record:
+        # getdel rotates the token: the old one is consumed atomically.
+        raw = await self._store.getdel(_REFRESH_PREFIX + token_str)
+        if not raw:
             raise TokenError(error="invalid_grant", error_description="Unknown refresh token")
+        record = json.loads(raw)
         # Re-derive scopes from the current allowlist so revocation takes effect
         # the next time the user refreshes.
         new_scopes = self.scopes_for_email(record["email"])
-        return self._mint_token_pair(
+        return await self._mint_token_pair(
             client_id=client.client_id,
             email=record["email"],
             scopes=new_scopes,
@@ -298,13 +326,15 @@ class GoogleOAuthProvider(
     async def revoke_token(self, token) -> None:
         token_str = getattr(token, "token", None)
         if token_str:
-            self._refresh.pop(token_str, None)
+            await self._store.delete(_REFRESH_PREFIX + token_str)
 
     # -----------------------------------------------------------------
     # Internal
     # -----------------------------------------------------------------
 
-    def _mint_token_pair(self, *, client_id: str, email: str, scopes: list[str]) -> OAuthToken:
+    async def _mint_token_pair(
+        self, *, client_id: str, email: str, scopes: list[str]
+    ) -> OAuthToken:
         now = _now()
         access_jwt = jwt.encode(
             {
@@ -320,12 +350,18 @@ class GoogleOAuthProvider(
             algorithm=JWT_ALGORITHM,
         )
         refresh_str = secrets.token_urlsafe(48)
-        self._refresh[refresh_str] = {
-            "client_id": client_id,
-            "email": email,
-            "scopes": scopes,
-            "expires_at": now + REFRESH_TOKEN_TTL_SEC,
-        }
+        await self._store.set(
+            _REFRESH_PREFIX + refresh_str,
+            json.dumps(
+                {
+                    "client_id": client_id,
+                    "email": email,
+                    "scopes": scopes,
+                    "expires_at": now + REFRESH_TOKEN_TTL_SEC,
+                }
+            ),
+            ttl_seconds=REFRESH_TOKEN_TTL_SEC,
+        )
         return OAuthToken(
             access_token=access_jwt,
             token_type="Bearer",

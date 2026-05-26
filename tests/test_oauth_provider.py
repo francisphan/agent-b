@@ -74,7 +74,7 @@ class TestStaticTokens:
 class TestJwtRoundTrip:
     async def test_mint_then_load_succeeds(self):
         provider = make_provider()
-        oauth_token = provider._mint_token_pair(
+        oauth_token = await provider._mint_token_pair(
             client_id="claude-desktop-1",
             email="alice@vinesofmendoza.com",
             scopes=[READ_SCOPE, WRITE_SCOPE],
@@ -209,7 +209,12 @@ class TestAuthorizeRedirect:
         # The state forwarded to Google is our internal handle, not the client's
         assert "state=client-state-abc" not in url
         # One pending record should be stashed for the callback to consume
-        assert len(provider._pending) == 1
+        from src.oauth_provider import _PENDING_PREFIX
+
+        pending_keys = [
+            k for k in provider._store._data if k.startswith(_PENDING_PREFIX)
+        ]
+        assert len(pending_keys) == 1
 
     async def test_authorize_omits_hd_when_extras_present(self):
         # If any email is on the off-domain escape hatch we cannot let Google
@@ -234,16 +239,16 @@ class TestAuthorizeRedirect:
 
 
 class TestPendingStateLifecycle:
-    def test_pop_consumes_once(self):
+    async def test_pop_consumes_once(self):
         provider = make_provider()
-        provider.stash_pending("st-1", {"client_id": "cli", "redirect_uri": "x"})
-        assert provider.pop_pending("st-1") is not None
-        assert provider.pop_pending("st-1") is None
+        await provider.stash_pending("st-1", {"client_id": "cli", "redirect_uri": "x"})
+        assert await provider.pop_pending("st-1") is not None
+        assert await provider.pop_pending("st-1") is None
 
-    def test_pop_expired_returns_none(self, monkeypatch):
+    async def test_pop_expired_returns_none(self, monkeypatch):
         provider = make_provider()
         # Stash, then warp time forward past the TTL
-        provider.stash_pending("st-2", {"client_id": "cli", "redirect_uri": "x"})
+        await provider.stash_pending("st-2", {"client_id": "cli", "redirect_uri": "x"})
         from src import oauth_provider
 
         monkeypatch.setattr(
@@ -251,7 +256,7 @@ class TestPendingStateLifecycle:
             "_now",
             lambda: int(time.time()) + oauth_provider.PENDING_AUTH_TTL_SEC + 5,
         )
-        assert provider.pop_pending("st-2") is None
+        assert await provider.pop_pending("st-2") is None
 
 
 class TestAuthorizationCodeRoundTrip:
@@ -261,7 +266,7 @@ class TestAuthorizationCodeRoundTrip:
             client_id="cli-2",
             redirect_uris=[AnyUrl("http://localhost:33419/callback")],
         )
-        code = provider.issue_authorization_code(
+        code = await provider.issue_authorization_code(
             client_id="cli-2",
             redirect_uri=AnyUrl("http://localhost:33419/callback"),
             redirect_uri_provided_explicitly=True,
@@ -283,7 +288,7 @@ class TestAuthorizationCodeRoundTrip:
         client_b = OAuthClientInformationFull(
             client_id="cli-b", redirect_uris=[AnyUrl("http://localhost:2/cb")]
         )
-        code = provider.issue_authorization_code(
+        code = await provider.issue_authorization_code(
             client_id="cli-a",
             redirect_uri=AnyUrl("http://localhost:1/cb"),
             redirect_uri_provided_explicitly=True,
@@ -301,7 +306,7 @@ class TestRefreshTokenFlow:
             client_id="cli-3",
             redirect_uris=[AnyUrl("http://localhost:1/cb")],
         )
-        first = provider._mint_token_pair(
+        first = await provider._mint_token_pair(
             client_id="cli-3",
             email="alice@vinesofmendoza.com",
             scopes=[READ_SCOPE, WRITE_SCOPE],
@@ -322,7 +327,7 @@ class TestRefreshTokenFlow:
             client_id="cli-4",
             redirect_uris=[AnyUrl("http://localhost:1/cb")],
         )
-        first = provider._mint_token_pair(
+        first = await provider._mint_token_pair(
             client_id="cli-4",
             email="alice@vinesofmendoza.com",
             scopes=[READ_SCOPE, WRITE_SCOPE],
