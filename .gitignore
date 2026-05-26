@@ -10,3 +10,5 @@ dist/
 .mypy_cache/
 scripts/
 CLAUDE.md
+.cache/
+tool_usage.jsonl
