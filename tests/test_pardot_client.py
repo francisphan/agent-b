@@ -350,3 +350,46 @@ class TestNoRetryOn4xx:
             _with_retry(always_403)
 
         mock_sleep.assert_not_called()
+
+
+class TestErrorLogging:
+    @patch("src.pardot_client.time.sleep")
+    def test_400_logs_url_and_body_at_error(
+        self, mock_sleep, mock_env, mock_sf, caplog
+    ):
+        response_400 = Mock()
+        response_400.status_code = 400
+        response_400.url = "https://pi.pardot.com/api/v5/objects/prospects/999"
+        response_400.text = '{"code": 4, "message": "Invalid prospect ID"}'
+        http_err = requests.exceptions.HTTPError(response=response_400)
+
+        def always_400(session):
+            raise http_err
+
+        with caplog.at_level("WARNING", logger="src.pardot_client"):
+            with pytest.raises(requests.exceptions.HTTPError):
+                _with_retry(always_400)
+
+        rec = next(r for r in caplog.records if r.levelname == "ERROR")
+        msg = rec.getMessage()
+        assert "status=400" in msg
+        assert "prospects/999" in msg  # the request URL
+        assert "Invalid prospect ID" in msg  # Pardot's error body
+
+    @patch("src.pardot_client.time.sleep")
+    def test_500_retry_logs_at_warning(self, mock_sleep, mock_env, mock_sf, caplog):
+        response_500 = Mock()
+        response_500.status_code = 500
+        response_500.url = "https://pi.pardot.com/api/v5/objects/prospects"
+        response_500.text = "Internal Server Error"
+        http_err = requests.exceptions.HTTPError(response=response_500)
+
+        def always_500(session):
+            raise http_err
+
+        with caplog.at_level("WARNING", logger="src.pardot_client"):
+            with pytest.raises(requests.exceptions.HTTPError):
+                _with_retry(always_500)
+
+        assert any(r.levelname == "WARNING" for r in caplog.records)
+        assert "will retry" in caplog.text

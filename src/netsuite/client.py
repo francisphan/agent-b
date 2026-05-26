@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -19,8 +20,23 @@ from .exceptions import (
 )
 from .models import NetSuiteConfig, NetSuiteErrorResponse
 
+logger = logging.getLogger(__name__)
+
 # Verbs safe to retry after a transport fault that may have reached the server.
 _IDEMPOTENT_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+# Cap how much of a request/response body we write to the logs. SuiteQL queries
+# and NetSuite error payloads are usually small, but record writes can be large
+# and may carry PII, so we never log an unbounded body.
+_MAX_LOG_BODY = 2000
+
+
+def _clip(value: Any) -> str:
+    """Render a body for logging, truncated to a safe length."""
+    text = value if isinstance(value, str) else str(value)
+    if len(text) > _MAX_LOG_BODY:
+        return f"{text[:_MAX_LOG_BODY]}… (+{len(text) - _MAX_LOG_BODY} chars)"
+    return text
 
 
 class NetSuiteClient:
@@ -97,6 +113,13 @@ class NetSuiteClient:
 
             exc = self._build_exception(response)
 
+            will_retry = (
+                response.status_code == 429 or response.status_code >= 500
+            ) and attempt < self._config.max_retries
+            self._log_response_error(
+                method, path, params, json, response, attempt, will_retry
+            )
+
             if response.status_code == 429 and attempt < self._config.max_retries:
                 retry_after = parse_retry_after(response)
                 wait = calculate_backoff(
@@ -117,6 +140,40 @@ class NetSuiteClient:
             raise exc
 
         raise last_exc or NetSuiteError("Max retries exceeded")
+
+    @staticmethod
+    def _log_response_error(
+        method: str,
+        path: str,
+        params: dict[str, Any] | None,
+        body: dict[str, Any] | None,
+        response: httpx.Response,
+        attempt: int,
+        will_retry: bool,
+    ) -> None:
+        """Log a non-2xx NetSuite response with the request that caused it.
+
+        Includes the request body (e.g. the SuiteQL query) and NetSuite's error
+        payload so 4xx/5xx responses are diagnosable from the logs alone.
+        WARNING when the request will be retried, ERROR when it will be raised.
+        """
+        try:
+            detail = _clip(response.text)
+        except Exception:  # pragma: no cover - response body not readable
+            detail = "<unreadable>"
+
+        retry_note = " (will retry)" if will_retry else ""
+        logger.log(
+            logging.WARNING if will_retry else logging.ERROR,
+            "NetSuite %s %s -> HTTP %d%s | params=%s | request=%s | response=%s",
+            method,
+            path,
+            response.status_code,
+            retry_note,
+            params,
+            _clip(body) if body is not None else None,
+            detail,
+        )
 
     @staticmethod
     def _build_exception(response: httpx.Response) -> NetSuiteError:

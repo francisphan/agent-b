@@ -1,5 +1,6 @@
 """Pardot (Account Engagement) API v5 client, reusing Salesforce OAuth token."""
 
+import logging
 import os
 import re
 import time
@@ -15,13 +16,55 @@ from src.sf_client import (
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 BASE_URL = "https://pi.pardot.com/api/v5/objects"
 BASE_URL_V5 = "https://pi.pardot.com/api/v5"
 
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2  # seconds, doubled each retry
 
+# Cap how much of an error body we write to the logs — never log an unbounded
+# response (it may be large or carry PII).
+_MAX_LOG_BODY = 2000
+
 _pardot_session: list[requests.Session | None] = [None]
+
+
+def _clip(value: object) -> str:
+    """Render a value for logging, truncated to a safe length."""
+    text = value if isinstance(value, str) else str(value)
+    if len(text) > _MAX_LOG_BODY:
+        return f"{text[:_MAX_LOG_BODY]}… (+{len(text) - _MAX_LOG_BODY} chars)"
+    return text
+
+
+def _log_pardot_error(exc: Exception, will_retry: bool) -> None:
+    """Log a failed Pardot request with status, URL, and the error body.
+
+    When the exception is a ``requests.HTTPError`` we pull status/url/body off
+    the response; otherwise (e.g. the manual ``raise`` in ``_post``/``_patch``,
+    whose message already embeds the status and body) we log its repr. WARNING
+    when the call will be retried, ERROR when it propagates to the caller.
+    """
+    level = logging.WARNING if will_retry else logging.ERROR
+    note = " (will retry)" if will_retry else ""
+    resp = getattr(exc, "response", None)
+    if resp is not None:
+        try:
+            body = _clip(resp.text)
+        except Exception:  # pragma: no cover - body not readable
+            body = "<unreadable>"
+        logger.log(
+            level,
+            "Pardot request failed: status=%s url=%s%s | response=%s",
+            resp.status_code,
+            resp.url,
+            note,
+            body,
+        )
+    else:
+        logger.log(level, "Pardot request failed%s: %s", note, _clip(repr(exc)))
 
 # Pattern for safe path segments (each part between slashes in endpoint strings).
 # Allows alphanumeric, hyphens, dots, underscores — no traversal.
@@ -97,13 +140,16 @@ def _with_retry(func):
                     continue
                 # Don't retry client errors (4xx) — they won't succeed on retry
                 if 400 <= status < 500:
+                    _log_pardot_error(e, will_retry=False)
                     raise
             last_exc = e
+            _log_pardot_error(e, will_retry=attempt < MAX_RETRIES - 1)
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_BACKOFF * (2**attempt))
             continue
         except Exception as e:
             last_exc = e
+            _log_pardot_error(e, will_retry=attempt < MAX_RETRIES - 1)
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_BACKOFF * (2**attempt))
             continue

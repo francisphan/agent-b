@@ -11,6 +11,7 @@ transaction. The Oracle account used by this client should additionally
 have only SELECT grants on the OPERA schema.
 """
 
+import logging
 import os
 import re
 import time
@@ -20,11 +21,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2  # seconds, doubled each retry
 DEFAULT_ROW_LIMIT = 500
 HARD_ROW_LIMIT = 5000
+
+# Cap how much SQL we write to the logs — queries are normally small, but never
+# log an unbounded statement.
+_MAX_LOG_SQL = 2000
+
+
+def _clip(value: object) -> str:
+    """Render a value for logging, truncated to a safe length."""
+    text = value if isinstance(value, str) else str(value)
+    if len(text) > _MAX_LOG_SQL:
+        return f"{text[:_MAX_LOG_SQL]}… (+{len(text) - _MAX_LOG_SQL} chars)"
+    return text
 
 
 _conn_holder: list[oracledb.Connection | None] = [None]
@@ -175,6 +190,19 @@ def query(
             return [dict(zip(cols, row)) for row in rows]
         except oracledb.DatabaseError as e:
             last_err = e
+            will_retry = attempt < MAX_RETRIES - 1
+            # Log the offending SQL and the Oracle error so the failure is
+            # diagnosable. Bind *keys* only — bind values may carry guest PII.
+            logger.log(
+                logging.WARNING if will_retry else logging.ERROR,
+                "OPERA query failed (attempt %d/%d)%s: %s | sql=%s | binds=%s",
+                attempt + 1,
+                MAX_RETRIES,
+                " — will retry" if will_retry else "",
+                e,
+                _clip(sql),
+                sorted(binds),
+            )
             # Drop the cached connection — next attempt will reconnect.
             try:
                 if _conn_holder[0] is not None:
@@ -182,7 +210,7 @@ def query(
             except Exception:
                 pass
             _conn_holder[0] = None
-            if attempt < MAX_RETRIES - 1:
+            if will_retry:
                 time.sleep(RETRY_BACKOFF * (2 ** attempt))
 
     raise last_err if last_err else RuntimeError("OPERA query failed without exception")

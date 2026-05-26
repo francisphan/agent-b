@@ -1,6 +1,7 @@
 """Salesforce client with OAuth refresh token auth, singleton connection, and retry logic."""
 
 import json
+import logging
 import os
 import time
 from pathlib import Path
@@ -17,12 +18,44 @@ from src.sanitize import escape_sosl, validate_object_name, validate_path_segmen
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 TOKEN_CACHE = Path(__file__).parent.parent / ".token_cache.json"
 
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2  # seconds, doubled each retry
 
+# Cap how much of an error body we write to the logs — never log an unbounded
+# response (it may be large or carry PII).
+_MAX_LOG_BODY = 2000
+
 _sf_holder: list[Salesforce | None] = [None]
+
+
+def _clip(value: object) -> str:
+    """Render a value for logging, truncated to a safe length."""
+    text = value if isinstance(value, str) else str(value)
+    if len(text) > _MAX_LOG_BODY:
+        return f"{text[:_MAX_LOG_BODY]}… (+{len(text) - _MAX_LOG_BODY} chars)"
+    return text
+
+
+def _log_sf_error(exc: SalesforceError, will_retry: bool) -> None:
+    """Log a Salesforce API error with the request that caused it.
+
+    ``SalesforceError`` carries the HTTP status, the request URL (which for a
+    SOQL/SOSL query embeds the query itself), and the parsed error body — so a
+    4xx/5xx is diagnosable from the logs alone. WARNING when the call will be
+    retried, ERROR when it propagates to the caller.
+    """
+    logger.log(
+        logging.WARNING if will_retry else logging.ERROR,
+        "Salesforce request failed: status=%s url=%s%s | response=%s",
+        getattr(exc, "status", None),
+        getattr(exc, "url", None),
+        " (will retry)" if will_retry else "",
+        _clip(getattr(exc, "content", None)),
+    )
 
 
 def _save_token(instance_url: str, access_token: str, refresh_token: str | None = None):
@@ -185,6 +218,8 @@ def _with_retry(func, *, idempotent: bool = True):
         except SalesforceError as e:
             # Salesforce API errors (malformed query, permission denied, etc.)
             # Only retry for idempotent ops — these may be transient server errors
+            will_retry = idempotent and attempt < MAX_RETRIES - 1
+            _log_sf_error(e, will_retry)
             if not idempotent:
                 raise
             last_exc = e
