@@ -55,7 +55,7 @@ def make_oauth_callback_route(provider: GoogleOAuthProvider):
         code = request.query_params.get("code")
         error = request.query_params.get("error")
 
-        pending = provider.pop_pending(state)
+        pending = await provider.pop_pending(state)
         if not pending:
             return JSONResponse(
                 {"error": "invalid_state", "error_description": "Unknown or expired state"},
@@ -140,7 +140,7 @@ def make_oauth_callback_route(provider: GoogleOAuthProvider):
 
         scopes = provider.scopes_for_email(email)
         _log(f"ACCEPT email={email} scopes={scopes}")
-        internal_code = provider.issue_authorization_code(
+        internal_code = await provider.issue_authorization_code(
             client_id=pending["client_id"],
             redirect_uri=AnyUrl(client_redirect_uri),
             redirect_uri_provided_explicitly=pending["redirect_uri_provided_explicitly"],
