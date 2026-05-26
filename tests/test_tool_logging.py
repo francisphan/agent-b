@@ -114,3 +114,69 @@ class TestInstrument:
         blocker.write_text("x")
         monkeypatch.setenv("TOOL_USAGE_LOG", str(blocker / "bad.jsonl"))
         tool_logging._write_usage_record({"tool": "x"})  # should swallow the error
+
+    def test_correlation_id_is_logged_and_recorded(self, usage_path, caplog):
+        mcp = _build_mcp()
+        instrument(mcp)
+
+        token = tool_logging.correlation_id.set("turn-abc123")
+        try:
+            with caplog.at_level("INFO", logger="agent_b.usage"):
+                asyncio.run(
+                    mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"})
+                )
+        finally:
+            tool_logging.correlation_id.reset(token)
+
+        assert "corr=turn-abc123" in caplog.text
+        record = json.loads(usage_path.read_text().strip())
+        assert record["corr"] == "turn-abc123"
+
+    def test_correlation_id_absent_logs_none(self, usage_path, caplog):
+        mcp = _build_mcp()
+        instrument(mcp)
+        with caplog.at_level("INFO", logger="agent_b.usage"):
+            asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
+        record = json.loads(usage_path.read_text().strip())
+        assert record["corr"] is None
+
+
+class TestCorrelationIdMiddleware:
+    def test_header_sets_contextvar_for_downstream(self):
+        from starlette.applications import Starlette
+        from starlette.responses import JSONResponse
+        from starlette.routing import Route
+        from starlette.testclient import TestClient
+
+        from src.tool_logging import CorrelationIdMiddleware, correlation_id
+
+        async def echo(request):
+            return JSONResponse({"corr": correlation_id.get()})
+
+        app = Starlette(routes=[Route("/echo", echo)])
+        app.add_middleware(CorrelationIdMiddleware)
+        client = TestClient(app)
+
+        assert client.get("/echo").json()["corr"] is None
+        assert (
+            client.get("/echo", headers={"X-Correlation-ID": "turn-xyz"}).json()["corr"]
+            == "turn-xyz"
+        )
+
+    def test_overlong_header_is_clipped(self):
+        from starlette.applications import Starlette
+        from starlette.responses import JSONResponse
+        from starlette.routing import Route
+        from starlette.testclient import TestClient
+
+        from src.tool_logging import CorrelationIdMiddleware, correlation_id
+
+        async def echo(request):
+            return JSONResponse({"corr": correlation_id.get()})
+
+        app = Starlette(routes=[Route("/echo", echo)])
+        app.add_middleware(CorrelationIdMiddleware)
+        client = TestClient(app)
+
+        got = client.get("/echo", headers={"X-Correlation-ID": "z" * 200}).json()["corr"]
+        assert len(got) == 64

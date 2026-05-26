@@ -25,11 +25,22 @@ import os
 import re
 import sys
 import time
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
 
+from starlette.middleware.base import BaseHTTPMiddleware
+
 logger = logging.getLogger("agent_b.usage")
+
+# Correlation ID for the current request, taken from the X-Correlation-ID
+# header the Sabueso bot sets per conversation turn. Lets the per-tool logs
+# here be tied back to the bot turn that triggered them.
+correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=None)
+
+# Cap to keep a hostile/garbage header out of the logs unbounded.
+_MAX_CORRELATION_ID = 64
 
 # Per-string-value cap so a giant query or note can't bloat the logs.
 _MAX_VALUE = 500
@@ -130,6 +141,20 @@ def _write_usage_record(record: dict) -> None:
         logger.debug("Could not write tool-usage record", exc_info=True)
 
 
+class CorrelationIdMiddleware(BaseHTTPMiddleware):
+    """Read X-Correlation-ID off each request into a contextvar.
+
+    Added unconditionally (works in both OAuth and static-token modes) so the
+    tool-dispatch logger can stamp every call with the originating bot turn.
+    """
+
+    async def dispatch(self, request, call_next):
+        cid = request.headers.get("x-correlation-id")
+        if cid:
+            correlation_id.set(cid[:_MAX_CORRELATION_ID])
+        return await call_next(request)
+
+
 def configure_logging() -> None:
     """Ensure INFO-level logs reach stdout with a consistent format.
 
@@ -164,14 +189,15 @@ def instrument(mcp) -> None:
     async def logged_call_tool(name, arguments, *args, **kwargs):
         started = time.monotonic()
         auth = _auth_level()
+        corr = correlation_id.get()
         redacted_args = redact(arguments) if isinstance(arguments, dict) else arguments
         try:
             result = await original_call_tool(name, arguments, *args, **kwargs)
         except Exception as exc:
             duration_ms = round((time.monotonic() - started) * 1000)
             logger.info(
-                "tool=%s auth=%s status=error dur=%dms error=%s: %s | args=%s",
-                name, auth, duration_ms, type(exc).__name__, _clip(str(exc)),
+                "tool=%s corr=%s auth=%s status=error dur=%dms error=%s: %s | args=%s",
+                name, corr, auth, duration_ms, type(exc).__name__, _clip(str(exc)),
                 redacted_args,
             )
             _write_usage_record(
@@ -179,6 +205,7 @@ def instrument(mcp) -> None:
                     "ts": datetime.now(timezone.utc).isoformat(),
                     "event": "tool_call",
                     "tool": name,
+                    "corr": corr,
                     "auth": auth,
                     "status": "error",
                     "duration_ms": duration_ms,
@@ -191,8 +218,8 @@ def instrument(mcp) -> None:
         duration_ms = round((time.monotonic() - started) * 1000)
         size = _result_bytes(result)
         logger.info(
-            "tool=%s auth=%s status=ok dur=%dms result=%sB | args=%s",
-            name, auth, duration_ms, size if size is not None else "?",
+            "tool=%s corr=%s auth=%s status=ok dur=%dms result=%sB | args=%s",
+            name, corr, auth, duration_ms, size if size is not None else "?",
             redacted_args,
         )
         _write_usage_record(
@@ -200,6 +227,7 @@ def instrument(mcp) -> None:
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "event": "tool_call",
                 "tool": name,
+                "corr": corr,
                 "auth": auth,
                 "status": "ok",
                 "duration_ms": duration_ms,

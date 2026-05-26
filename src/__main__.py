@@ -6,9 +6,14 @@ import uvicorn
 
 from src.auth import ALLOW_INSECURE_NO_AUTH, READ_TOKEN, WRITE_TOKEN
 from src.server import BearerAuthMiddleware, _oauth_provider, mcp
+from src.tool_logging import CorrelationIdMiddleware
 
 transport = os.getenv("MCP_TRANSPORT", "streamable-http")
 app = mcp.streamable_http_app() if transport == "streamable-http" else mcp.sse_app()
+
+# Capture the bot's per-turn X-Correlation-ID on every request (both auth
+# modes) so tool-dispatch logs can be tied back to the originating bot turn.
+app.add_middleware(CorrelationIdMiddleware)
 
 # Decide the auth posture explicitly so a misconfigured deploy fails CLOSED
 # instead of silently serving data on its 0.0.0.0 bind.
