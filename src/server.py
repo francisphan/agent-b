@@ -15,8 +15,10 @@ from starlette.responses import JSONResponse
 from src.auth import ALLOW_INSECURE_NO_AUTH, AUTH_LEVEL, READ_TOKEN, WRITE_TOKEN
 from src.oauth_callback import make_oauth_callback_route
 from src.oauth_provider import GoogleOAuthProvider, READ_SCOPE
+from src.tool_logging import configure_logging, instrument
 
 load_dotenv()
+configure_logging()
 
 
 def _build_oauth_provider() -> Optional[GoogleOAuthProvider]:
@@ -152,6 +154,9 @@ from src.pardot_write_tools import register_tools as register_pardot_write_tools
 register_sf_write_tools(mcp)
 register_ns_write_tools(mcp)
 register_pardot_write_tools(mcp)
+
+# Wrap the tool dispatcher so every call is logged (redacted) for usage analysis.
+instrument(mcp)
 
 
 # ---------------------------------------------------------------------------
