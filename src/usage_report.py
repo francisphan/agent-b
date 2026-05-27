@@ -124,6 +124,61 @@ def aggregate(records: list[dict]) -> dict[str, Any]:
         "by_auth": dict(by_auth),
         "error_types": dict(error_types.most_common()),
         "tools": tools,
+        "turns": _aggregate_turns(records),
+    }
+
+
+def _aggregate_turns(records: list[dict]) -> dict[str, Any]:
+    """Group tool calls by correlation id (one id == one bot turn).
+
+    Records without a ``corr`` (e.g. calls not originating from a tagged bot
+    turn) are counted separately as ``untagged_calls`` rather than collapsed
+    into a single bogus turn.
+    """
+    by_corr: dict[str, list[dict]] = defaultdict(list)
+    untagged = 0
+    for r in records:
+        corr = r.get("corr")
+        if corr:
+            by_corr[corr].append(r)
+        else:
+            untagged += 1
+
+    items = []
+    for corr, recs in by_corr.items():
+        tss = sorted(r["ts"] for r in recs if r.get("ts"))
+        items.append(
+            {
+                "corr": corr,
+                "calls": len(recs),
+                "errors": sum(1 for r in recs if r.get("status") == "error"),
+                "tools": sorted({r.get("tool", "?") for r in recs}),
+                "total_ms": sum(
+                    float(r["duration_ms"])
+                    for r in recs
+                    if isinstance(r.get("duration_ms"), (int, float))
+                ),
+                "first": tss[0] if tss else None,
+                "last": tss[-1] if tss else None,
+            }
+        )
+    # Busiest turns first, then most recent.
+    items.sort(key=lambda t: (t["calls"], t["last"] or ""), reverse=True)
+
+    calls_per_turn = [t["calls"] for t in items]
+    return {
+        "count": len(items),
+        "untagged_calls": untagged,
+        "with_errors": sum(1 for t in items if t["errors"]),
+        "calls_per_turn": {
+            "avg": round(sum(calls_per_turn) / len(calls_per_turn), 1)
+            if calls_per_turn
+            else None,
+            "p50": _percentile([float(c) for c in calls_per_turn], 0.50),
+            "p95": _percentile([float(c) for c in calls_per_turn], 0.95),
+            "max": max(calls_per_turn) if calls_per_turn else None,
+        },
+        "items": items,
     }
 
 
@@ -164,6 +219,32 @@ def render_text(stats: dict[str, Any], top: int | None = None) -> str:
         lines.append("Errors by type:")
         for etype, count in stats["error_types"].items():
             lines.append(f"  {count:>5}  {etype}")
+
+    turns = stats.get("turns")
+    if turns and turns["count"]:
+        cpt = turns["calls_per_turn"]
+        lines.append("")
+        lines.append(
+            f"Turns — {turns['count']} tagged "
+            f"({turns['with_errors']} with errors), "
+            f"{cpt['avg']} calls/turn avg, p95 {_ms(cpt['p95'])}, max {cpt['max']}"
+            + (f"; {turns['untagged_calls']} untagged calls" if turns["untagged_calls"] else "")
+        )
+        theader = f"{'corr':<14} {'calls':>6} {'err':>5} {'total_ms':>9}  tools"
+        lines.append(theader)
+        lines.append("-" * len(theader))
+        rows = turns["items"][:top] if top else turns["items"]
+        for t in rows:
+            lines.append(
+                f"{t['corr']:<14} {t['calls']:>6} {t['errors']:>5} "
+                f"{_ms(t['total_ms']):>9}  {', '.join(t['tools'])}"
+            )
+    elif turns and turns["untagged_calls"]:
+        lines.append("")
+        lines.append(
+            f"Turns — none tagged (all {turns['untagged_calls']} calls lack a "
+            "correlation id; bot may predate correlation support)"
+        )
     return "\n".join(lines)
 
 

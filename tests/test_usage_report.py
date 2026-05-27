@@ -114,6 +114,46 @@ class TestLoadRecords:
         assert [r["tool"] for r in recs] == ["new"]
 
 
+class TestTurns:
+    def test_groups_by_corr(self):
+        recs = [
+            _rec("sf_search", corr="t1"),
+            _rec("sf_soql_query", corr="t1", status="error"),
+            _rec("ns_suiteql_query", corr="t2"),
+        ]
+        turns = aggregate(recs)["turns"]
+        assert turns["count"] == 2
+        assert turns["untagged_calls"] == 0
+        assert turns["with_errors"] == 1
+        t1 = next(t for t in turns["items"] if t["corr"] == "t1")
+        assert t1["calls"] == 2
+        assert t1["errors"] == 1
+        assert t1["tools"] == ["sf_search", "sf_soql_query"]  # sorted unique
+
+    def test_untagged_calls_counted_separately(self):
+        recs = [_rec("sf_search"), _rec("sf_search", corr="t1")]
+        turns = aggregate(recs)["turns"]
+        assert turns["count"] == 1
+        assert turns["untagged_calls"] == 1
+
+    def test_calls_per_turn_stats(self):
+        recs = [_rec("a", corr="t1"), _rec("a", corr="t1"), _rec("a", corr="t2")]
+        cpt = aggregate(recs)["turns"]["calls_per_turn"]
+        assert cpt["max"] == 2
+        assert cpt["avg"] == 1.5
+
+    def test_sorted_busiest_first(self):
+        recs = [_rec("a", corr="quiet")]
+        recs += [_rec("a", corr="busy") for _ in range(3)]
+        items = aggregate(recs)["turns"]["items"]
+        assert [t["corr"] for t in items] == ["busy", "quiet"]
+
+    def test_empty_has_no_turns(self):
+        turns = aggregate([])["turns"]
+        assert turns["count"] == 0
+        assert turns["items"] == []
+
+
 class TestRenderText:
     def test_empty_message(self):
         assert render_text(aggregate([])) == "No tool-call records found."
@@ -128,3 +168,13 @@ class TestRenderText:
         out = render_text(aggregate(recs), top=2)
         # Only 2 of the 5 tool rows should appear.
         assert sum(f"tool{i}" in out for i in range(5)) == 2
+
+    def test_renders_turns_section(self):
+        recs = [_rec("sf_search", corr="abc123"), _rec("sf_search", corr="abc123")]
+        out = render_text(aggregate(recs))
+        assert "Turns —" in out
+        assert "abc123" in out
+
+    def test_turns_note_when_all_untagged(self):
+        out = render_text(aggregate([_rec("sf_search"), _rec("sf_search")]))
+        assert "none tagged" in out
