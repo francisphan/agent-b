@@ -7,7 +7,7 @@ atomic/composite MCP tool (the way ``guest_360_profile`` already does).
 
 Two data sources, joined on the per-turn correlation id:
 
-* **Sabueso turn metrics** (``METRICS_FILE``, default ``../Sabueso/.cache/
+* **Sabueso turn metrics** (``SABUESO_METRICS_LOG``, default ``../Sabueso/.cache/
   metrics.jsonl``) — one record per bot turn with the ordered ``tool_calls``
   list and, when ``SABUESO_DEBUG_PAYLOADS`` is on, the raw ``request`` text.
 * **agent-b tool usage** (``TOOL_USAGE_LOG``, default ``.cache/
