@@ -163,12 +163,14 @@ if OPERA_TOOLS_ENABLED:
 else:
     logger.info("OPERA MCP tools: disabled (set OPERA_TOOLS_ENABLED=true to enable)")
 
-# Write tools — gated behind MCP_WRITE_TOKEN
+# Write tools — gated behind MCP_WRITE_TOKEN (each tool calls require_write_access)
 from src.sf_write_tools import register_tools as register_sf_write_tools  # noqa: E402
 from src.ns_write_tools import register_tools as register_ns_write_tools  # noqa: E402
+from src.opportunity_tools import register_tools as register_opportunity_tools  # noqa: E402
 
 register_sf_write_tools(mcp)
 register_ns_write_tools(mcp)
+register_opportunity_tools(mcp)
 
 # Pardot: by default only a curated subset of READ tools is live (high-value
 # guest/marketing lookups). The remaining read tools and ALL write tools were
