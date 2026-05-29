@@ -143,10 +143,25 @@ from src.person_tools import register_tools as register_person_tools  # noqa: E4
 
 register_sf_tools(mcp)
 register_ns_tools(mcp)
-register_opera_tools(mcp)
 register_cross_tools(mcp)
 register_wine_tools(mcp)
 register_person_tools(mcp)
+
+# OPERA: tools are gated behind OPERA_TOOLS_ENABLED and OFF by default while the
+# OPERA PMS connection is down. The cross-system composites (guest_360_profile,
+# wine_owner_lookup, person_brief) call opera_client directly and already degrade
+# gracefully when OPERA is unavailable, so they're unaffected. Set
+# OPERA_TOOLS_ENABLED=true once the connection is restored.
+OPERA_TOOLS_ENABLED = os.getenv("OPERA_TOOLS_ENABLED", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+if OPERA_TOOLS_ENABLED:
+    register_opera_tools(mcp)
+    logger.info("OPERA MCP tools: enabled")
+else:
+    logger.info("OPERA MCP tools: disabled (set OPERA_TOOLS_ENABLED=true to enable)")
 
 # Write tools — gated behind MCP_WRITE_TOKEN
 from src.sf_write_tools import register_tools as register_sf_write_tools  # noqa: E402
