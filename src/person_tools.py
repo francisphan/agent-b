@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 
 from src.sanitize import escape_soql, escape_soql_like, escape_suiteql
-from src.sf_client import query as sf_query
+from src.sf_client import query as sf_query, record_url
 from src.ns_client import suiteql_query
 from src.cross_tools import guest_360
 
@@ -249,6 +249,7 @@ def _slim_opp(o: dict) -> dict:
         "amount": o.get("Amount"),
         "close_date": o.get("CloseDate"),
         "owner": (o.get("Owner") or {}).get("Name"),
+        "url": record_url("Opportunity", o.get("Id")),
     }
 
 
@@ -542,6 +543,12 @@ def build_person_brief(query: str, deep: bool = True) -> dict:
         "sf_account_id": account_id,
         "ns_customer_id": ns_owner.get("ns_customer_id"),
     }
+    # Primary record links for a human to open/verify in Salesforce. Link the
+    # account first; the won-opportunity links live under ownership.
+    out["links"] = {
+        "account": record_url("Account", account_id),
+        "contact": record_url("Contact", top.get("sf_contact_id")),
+    }
 
     # Deep enrichment: the full cross-system pull (stays, financials, marketing,
     # OPERA) — only meaningful with an email to join on.
@@ -613,7 +620,9 @@ def register_tools(mcp):
             signals, brand, owner_code, vineyard_name, number_of_lots,
             land_purchases, won_opportunities}, villa{is_owner, signals,
             won_opportunities}), membership (tvg_member), services (current/past/
-            future), opportunities, system_ids, and — when deep — stays,
-            stays_opera, financials, marketing. Partial failures are in _errors.
+            future), opportunities, system_ids, links (Salesforce account/contact
+            URLs for a human to open; each won_opportunities entry also has a
+            `url`), and — when deep — stays, stays_opera, financials, marketing.
+            Partial failures are in _errors.
         """
         return build_person_brief(query, deep=deep)

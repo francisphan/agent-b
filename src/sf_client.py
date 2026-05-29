@@ -183,6 +183,27 @@ def get_client() -> Salesforce:
     return _sf_holder[0]
 
 
+def instance_url() -> str:
+    """Base URL of the connected Salesforce instance (e.g. https://acme.my.salesforce.com)."""
+    sf = get_client()
+    host = getattr(sf, "sf_instance", None)
+    if host:
+        return f"https://{host}"
+    base = getattr(sf, "base_url", "") or ""
+    return base.split("/services/")[0]
+
+
+def record_url(object_name: str, record_id: str | None) -> str:
+    """Lightning URL for a record so a human can open it. '' if unbuildable; never raises."""
+    if not record_id:
+        return ""
+    try:
+        base = instance_url()
+    except Exception:
+        return ""
+    return f"{base}/lightning/r/{object_name}/{record_id}/view" if base else ""
+
+
 def _with_retry(func, *, idempotent: bool = True):
     """Execute func(sf) with retry on transient errors and re-auth on expired session.
 
