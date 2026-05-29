@@ -2,6 +2,7 @@
 
 import hmac
 import json
+import logging
 import os
 from typing import Optional
 
@@ -19,6 +20,7 @@ from src.tool_logging import configure_logging, instrument
 
 load_dotenv()
 configure_logging()
+logger = logging.getLogger(__name__)
 
 
 def _build_oauth_provider() -> Optional[GoogleOAuthProvider]:
@@ -134,26 +136,56 @@ if _oauth_provider is not None:
 # ---------------------------------------------------------------------------
 from src.sf_tools import register_tools as register_sf_tools  # noqa: E402
 from src.ns_tools import register_tools as register_ns_tools  # noqa: E402
-from src.pardot_tools import register_tools as register_pardot_tools  # noqa: E402
 from src.opera_tools import register_tools as register_opera_tools  # noqa: E402
 from src.cross_tools import register_tools as register_cross_tools  # noqa: E402
 from src.wine_tools import register_tools as register_wine_tools  # noqa: E402
+from src.person_tools import register_tools as register_person_tools  # noqa: E402
 
 register_sf_tools(mcp)
 register_ns_tools(mcp)
-register_pardot_tools(mcp)
 register_opera_tools(mcp)
 register_cross_tools(mcp)
 register_wine_tools(mcp)
+register_person_tools(mcp)
 
 # Write tools — gated behind MCP_WRITE_TOKEN
 from src.sf_write_tools import register_tools as register_sf_write_tools  # noqa: E402
 from src.ns_write_tools import register_tools as register_ns_write_tools  # noqa: E402
-from src.pardot_write_tools import register_tools as register_pardot_write_tools  # noqa: E402
 
 register_sf_write_tools(mcp)
 register_ns_write_tools(mcp)
-register_pardot_write_tools(mcp)
+
+# Pardot: by default only a curated subset of READ tools is live (high-value
+# guest/marketing lookups). The remaining read tools and ALL write tools were
+# built out for pv-campaign-2026 and stay parked in code. Set
+# PARDOT_TOOLS_ENABLED=true to register the full Pardot surface (all reads +
+# writes). The cross-system composites (guest_360_profile, lookup_guest_by_email)
+# call pardot_client directly and are unaffected either way.
+from src.pardot_tools import (  # noqa: E402
+    CURATED_READ_TOOLS as PARDOT_CURATED_READ_TOOLS,
+    register_tools as register_pardot_tools,
+)
+
+PARDOT_TOOLS_ENABLED = os.getenv("PARDOT_TOOLS_ENABLED", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+if PARDOT_TOOLS_ENABLED:
+    from src.pardot_write_tools import (  # noqa: E402
+        register_tools as register_pardot_write_tools,
+    )
+
+    register_pardot_tools(mcp)
+    register_pardot_write_tools(mcp)
+    logger.info("Pardot MCP tools: full surface enabled (all reads + writes)")
+else:
+    register_pardot_tools(mcp, include=PARDOT_CURATED_READ_TOOLS)
+    logger.info(
+        "Pardot MCP tools: curated read subset only (%d tools); "
+        "set PARDOT_TOOLS_ENABLED=true for the full surface",
+        len(PARDOT_CURATED_READ_TOOLS),
+    )
 
 # Wrap the tool dispatcher so every call is logged (redacted) for usage analysis.
 instrument(mcp)

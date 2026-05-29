@@ -155,8 +155,85 @@ DEFAULT_FORM_FIELD_FIELDS = (
 DEFAULT_EXTERNAL_ACTIVITY_FIELDS = "id,type,value,prospectId,activityDate,createdAt"
 
 
-def register_tools(mcp):
-    """Register all Pardot tools on the given FastMCP instance."""
+class _SelectiveRegistrar:
+    """Proxy that registers only allow-listed tools.
+
+    Pardot's read tools are ~74 nested ``@mcp.tool()`` functions. Rebinding the
+    local ``mcp`` to this proxy lets register_tools expose a curated subset
+    without editing each definition: a tool whose name isn't in ``include`` is
+    still defined but never registered (kept in code, off the live surface).
+    """
+
+    def __init__(self, mcp, include):
+        self._mcp = mcp
+        self._include = include
+
+    def tool(self, *args, **kwargs):
+        real = self._mcp.tool(*args, **kwargs)
+
+        def decorator(fn):
+            if fn.__name__ in self._include:
+                return real(fn)
+            return fn
+
+        return decorator
+
+    def __getattr__(self, name):
+        return getattr(self._mcp, name)
+
+
+# High-value read tools kept on the live surface by default. The rest of the
+# Pardot read tools stay defined in code but parked (see server.py).
+CURATED_READ_TOOLS = frozenset(
+    {
+        # Prospects
+        "pardot_get_prospect",
+        "pardot_query_prospects",
+        # Prospect accounts
+        "pardot_get_prospect_account",
+        "pardot_query_prospect_accounts",
+        # Lists & memberships
+        "pardot_query_lists",
+        "pardot_get_list",
+        "pardot_query_list_memberships",
+        # Campaigns
+        "pardot_query_campaigns",
+        "pardot_get_campaign",
+        # Visitor activity
+        "pardot_query_visitors",
+        "pardot_get_visitor",
+        "pardot_query_visits",
+        "pardot_get_visit",
+        "pardot_query_visitor_activities",
+        "pardot_get_visitor_activity",
+        # Emails
+        "pardot_query_emails",
+        "pardot_get_email",
+        "pardot_get_list_email_stats",
+        # Lifecycle
+        "pardot_get_lifecycle_stage",
+        "pardot_query_lifecycle_stages",
+        "pardot_get_lifecycle_history",
+        "pardot_query_lifecycle_histories",
+        # Tags
+        "pardot_query_tags",
+        "pardot_get_tag",
+        "pardot_query_tagged_objects",
+    }
+)
+
+
+def register_tools(mcp, include=None):
+    """Register Pardot read tools on the given FastMCP instance.
+
+    Args:
+        mcp: FastMCP instance to register on.
+        include: optional set of tool names. When given, only those tools are
+            registered; others remain defined but off the live surface. When None
+            (default), every read tool is registered.
+    """
+    if include is not None:
+        mcp = _SelectiveRegistrar(mcp, set(include))
 
     @mcp.tool()
     def pardot_query_prospects(
