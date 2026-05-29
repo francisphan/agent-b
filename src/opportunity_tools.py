@@ -20,7 +20,7 @@ from datetime import date, timedelta
 
 from src.auth import require_write_access
 from src.sanitize import escape_soql, escape_soql_like, validate_sf_id
-from src.sf_client import create_record
+from src.sf_client import create_record, record_url
 from src.sf_client import query as sf_query
 
 # Offering types — the product is encoded in the Opportunity Name (mirrors the
@@ -182,6 +182,7 @@ def build_create_opportunity(
         return {
             "status": "ok",
             "opportunity_id": result["id"],
+            "opportunity_url": record_url("Opportunity", result["id"]),
             "account_id": account_id,
             "account_name": account_name,
             "payload": data,
@@ -233,8 +234,9 @@ def register_tools(mcp):
             lead_source: Optional LeadSource value.
 
         Returns:
-            status="ok" with opportunity_id, account_id, account_name, and the
-            payload; or invalid_product / needs_account / ambiguous_account /
+            status="ok" with opportunity_id, opportunity_url (a link for a human
+            to open), account_id, account_name, and the payload; or
+            invalid_product / needs_account / ambiguous_account /
             account_not_found / create_failed with details.
         """
         try:
