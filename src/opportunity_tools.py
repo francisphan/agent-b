@@ -99,6 +99,22 @@ def _accounts_for(person: str) -> list[dict]:
     return list(by_id.values())
 
 
+def _name_confident(query: str, account_name: str | None) -> bool:
+    """True only if every token of the query name is also a token of the account
+    name. Guards the write from auto-creating against a loose SUBSTRING match
+    (e.g. "Ana" substring-matching "Susana Lopez") when resolving by name."""
+
+    def toks(s: str | None) -> set[str]:
+        return {
+            t
+            for t in re.sub(r"[^a-z0-9 ]", " ", (s or "").lower()).split()
+            if len(t) >= 2
+        }
+
+    q, n = toks(query), toks(account_name)
+    return bool(q) and bool(n) and q <= n
+
+
 def build_create_opportunity(
     person: str = "",
     product: str = "",
@@ -157,8 +173,22 @@ def build_create_opportunity(
                 "candidates": candidates[:8],
                 "message": "Multiple accounts match; pass account_id to disambiguate.",
             }
-        account_id = candidates[0]["account_id"]
-        account_name = candidates[0].get("account_name")
+        only = candidates[0]
+        # A single match is not enough for a WRITE if it's only a loose substring
+        # hit — require the name to actually contain the query's tokens, else make
+        # the caller confirm with an explicit account_id.
+        if not _name_confident(person, only.get("account_name")):
+            return {
+                "status": "ambiguous_account",
+                "candidates": [only],
+                "message": (
+                    f"Only a loose name match for {person!r} "
+                    f"({only.get('account_name')!r}) — pass account_id to confirm "
+                    "the right account."
+                ),
+            }
+        account_id = only["account_id"]
+        account_name = only.get("account_name")
 
     data = {
         "Name": f"{account_name or person or account_id} - {product}",
