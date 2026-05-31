@@ -35,6 +35,13 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Reuse one HTTP connection across calls. Over the Railway Tailscale SOCKS proxy,
+# opening a fresh connection per call is the expensive AND flaky step — each cold
+# SOCKS connect is a chance to hit "General SOCKS server failure". A kept-alive
+# Session pays that cost once, then rides a warm, stable path. requests.Session
+# is safe for concurrent use here (urllib3 pools are thread-safe).
+_session = requests.Session()
+
 
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2  # seconds, doubled each retry
@@ -168,7 +175,7 @@ def query(
     for attempt in range(MAX_RETRIES):
         will_retry = attempt < MAX_RETRIES - 1
         try:
-            resp = requests.post(
+            resp = _session.post(
                 url, json=payload, headers=headers, timeout=HTTP_TIMEOUT, proxies=proxies
             )
         except requests.RequestException as e:

@@ -92,19 +92,19 @@ def _resp(status_code, *, ok=None, json_body=None, text=""):
 
 class TestQueryHTTP:
     @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
-    @patch("src.opera_client.requests.post")
+    @patch("src.opera_client._session.post")
     def test_success_returns_rows(self, mock_post, _cfg):
         mock_post.return_value = _resp(200, json_body={"rows": [{"name_id": "1", "first": "A"}]})
         assert query("SELECT 1 FROM DUAL") == [{"name_id": "1", "first": "A"}]
 
     @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
-    @patch("src.opera_client.requests.post")
+    @patch("src.opera_client._session.post")
     def test_empty_rows_default(self, mock_post, _cfg):
         mock_post.return_value = _resp(200, json_body={})  # no "rows" key
         assert query("SELECT 1 FROM DUAL") == []
 
     @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
-    @patch("src.opera_client.requests.post")
+    @patch("src.opera_client._session.post")
     def test_http_400_guard_rejection_raises_valueerror(self, mock_post, _cfg):
         mock_post.return_value = _resp(
             400, json_body={"error": "only SELECT/WITH queries are allowed (got: UPDATE)"}
@@ -115,7 +115,7 @@ class TestQueryHTTP:
         assert mock_post.call_count == 1  # not retried
 
     @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
-    @patch("src.opera_client.requests.post")
+    @patch("src.opera_client._session.post")
     def test_http_401_raises_runtimeerror(self, mock_post, _cfg):
         mock_post.return_value = _resp(401, text="unauthorized")
         with pytest.raises(RuntimeError, match="auth failed"):
@@ -124,7 +124,7 @@ class TestQueryHTTP:
 
     @patch("src.opera_client.time.sleep")
     @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
-    @patch("src.opera_client.requests.post")
+    @patch("src.opera_client._session.post")
     def test_network_error_retries_and_logs_without_pii(self, mock_post, _cfg, _sleep, caplog):
         mock_post.side_effect = requests.ConnectionError("connection refused")
         sql = "SELECT NAME_ID FROM OPERA.NONEXISTENT WHERE LAST = :last"
@@ -144,7 +144,7 @@ class TestQueryHTTP:
 
     @patch("src.opera_client.time.sleep")
     @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
-    @patch("src.opera_client.requests.post")
+    @patch("src.opera_client._session.post")
     def test_5xx_retries_then_raises(self, mock_post, _cfg, _sleep):
         mock_post.return_value = _resp(503, text="upstream down")
         with pytest.raises(RuntimeError):
@@ -152,7 +152,7 @@ class TestQueryHTTP:
         assert mock_post.call_count == 3
 
     @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
-    @patch("src.opera_client.requests.post")
+    @patch("src.opera_client._session.post")
     def test_proxy_passed_when_set(self, mock_post, _cfg, monkeypatch):
         monkeypatch.setenv("OPERA_API_PROXY", "socks5h://localhost:1055")
         mock_post.return_value = _resp(200, json_body={"rows": []})
@@ -164,7 +164,7 @@ class TestQueryHTTP:
         }
 
     @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
-    @patch("src.opera_client.requests.post")
+    @patch("src.opera_client._session.post")
     def test_no_proxy_when_unset(self, mock_post, _cfg, monkeypatch):
         monkeypatch.delenv("OPERA_API_PROXY", raising=False)
         mock_post.return_value = _resp(200, json_body={"rows": []})
