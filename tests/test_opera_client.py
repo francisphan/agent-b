@@ -150,3 +150,24 @@ class TestQueryHTTP:
         with pytest.raises(RuntimeError):
             query("SELECT 1 FROM DUAL")
         assert mock_post.call_count == 3
+
+    @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
+    @patch("src.opera_client.requests.post")
+    def test_proxy_passed_when_set(self, mock_post, _cfg, monkeypatch):
+        monkeypatch.setenv("OPERA_API_PROXY", "socks5h://localhost:1055")
+        mock_post.return_value = _resp(200, json_body={"rows": []})
+        query("SELECT 1 FROM DUAL")
+        _, kwargs = mock_post.call_args
+        assert kwargs.get("proxies") == {
+            "http": "socks5h://localhost:1055",
+            "https": "socks5h://localhost:1055",
+        }
+
+    @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
+    @patch("src.opera_client.requests.post")
+    def test_no_proxy_when_unset(self, mock_post, _cfg, monkeypatch):
+        monkeypatch.delenv("OPERA_API_PROXY", raising=False)
+        mock_post.return_value = _resp(200, json_body={"rows": []})
+        query("SELECT 1 FROM DUAL")
+        _, kwargs = mock_post.call_args
+        assert kwargs.get("proxies") is None

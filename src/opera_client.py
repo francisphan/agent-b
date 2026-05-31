@@ -14,8 +14,13 @@ keyed by lowercase column name, so every OPERA tool and cross-system composite
 keeps working without modification.
 
 Config (env):
-    OPERA_API_BASE_URL   e.g. http://opera-api.<tailnet>.ts.net:8080
+    OPERA_API_BASE_URL   e.g. https://tvrspms.<tailnet>.ts.net
     OPERA_API_TOKEN      bearer token the Go service requires
+    OPERA_API_PROXY      optional; route ONLY the OPERA call through a proxy, e.g.
+                         socks5h://localhost:1055 to reach the service over a
+                         Tailscale userspace SOCKS5 tunnel (socks5h => DNS is
+                         resolved at the tailscaled end, so the MagicDNS name
+                         resolves over the tailnet). Other upstreams are direct.
 """
 
 import logging
@@ -149,12 +154,18 @@ def query(
     base, token = _api_config()
     url = f"{base}/query"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    # Route only this call through OPERA_API_PROXY (e.g. the Tailscale SOCKS5
+    # tunnel) if set; leave all other agent-b upstreams direct.
+    proxy = os.environ.get("OPERA_API_PROXY", "").strip()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
 
     last_err: Exception | None = None
     for attempt in range(MAX_RETRIES):
         will_retry = attempt < MAX_RETRIES - 1
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=HTTP_TIMEOUT)
+            resp = requests.post(
+                url, json=payload, headers=headers, timeout=HTTP_TIMEOUT, proxies=proxies
+            )
         except requests.RequestException as e:
             # Network/timeout — transient, retry. Log bind *keys* only (PII).
             last_err = e
