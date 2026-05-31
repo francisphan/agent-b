@@ -97,6 +97,9 @@ def register_tools(mcp):
              AND daily.rn_idx = 1
             WHERE rn.RESORT = :resort
               AND TRUNC(rn.BEGIN_DATE) = TO_DATE(:date_str, 'YYYY-MM-DD')
+              -- Exclude Posting Masters (9xxx / PM* "rooms" = charge accounts, not stays)
+              AND (daily.ROOM IS NULL OR (UPPER(daily.ROOM) NOT LIKE 'PM%'
+                   AND NOT REGEXP_LIKE(daily.ROOM, '^9[0-9][0-9][0-9]$')))
               {status_clause}
             ORDER BY n.LAST, n.FIRST
         """
@@ -157,6 +160,9 @@ def register_tools(mcp):
               AND rn.RESV_STATUS != 'CANCELLED'
               AND TRUNC(rn.BEGIN_DATE) <= TO_DATE(:date_str, 'YYYY-MM-DD')
               AND TRUNC(rn.END_DATE)   >  TO_DATE(:date_str, 'YYYY-MM-DD')
+              -- Exclude Posting Masters (9xxx / PM* "rooms" = charge accounts, not stays)
+              AND (daily.ROOM IS NULL OR (UPPER(daily.ROOM) NOT LIKE 'PM%'
+                   AND NOT REGEXP_LIKE(daily.ROOM, '^9[0-9][0-9][0-9]$')))
             ORDER BY n.LAST, n.FIRST
         """
         try:
@@ -264,6 +270,9 @@ def register_tools(mcp):
              AND daily.rn_idx = 1
             WHERE rn.RESORT = :resort
               AND rn.NAME_ID = :name_id
+              -- Exclude Posting Masters (9xxx / PM* "rooms" = charge accounts, not stays)
+              AND (daily.ROOM IS NULL OR (UPPER(daily.ROOM) NOT LIKE 'PM%'
+                   AND NOT REGEXP_LIKE(daily.ROOM, '^9[0-9][0-9][0-9]$')))
             ORDER BY rn.BEGIN_DATE DESC
         """
         try:
