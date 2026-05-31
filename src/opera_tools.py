@@ -243,9 +243,6 @@ def register_tools(mcp):
                    TO_CHAR(TRUNC(rn.BEGIN_DATE), 'YYYY-MM-DD') AS CHECK_IN,
                    TO_CHAR(TRUNC(rn.END_DATE),   'YYYY-MM-DD') AS CHECK_OUT,
                    rn.RESV_STATUS,
-                   rn.RATE_CODE,
-                   rn.MARKET_CODE,
-                   rn.SOURCE_CODE,
                    daily.ROOM,
                    daily.ADULTS,
                    daily.CHILDREN
