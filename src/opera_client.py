@@ -1,14 +1,26 @@
-"""OPERA PMS Oracle client — singleton connection, retry, and read-only SQL helper.
+"""OPERA PMS client — HTTP shim to the opera-pms-api service.
 
-Targets the on-prem OPERA 5 Oracle database (OPERA schema) over a network
-tunnel (Tailscale, Cloudflare Tunnel, etc.) reachable from the Railway
-deployment. Uses python-oracledb in Thin mode so no Instant Client is
-required in the container image.
+OPERA's Oracle DB is only reachable from inside the TVOMCORP network, which the
+Railway deployment cannot reach directly. Instead of connecting to Oracle from
+here, this client POSTs read-only SQL to **opera-pms-api** — a thin Go service
+that runs on the TVOMCORP network (next to the OPERA DB) and is exposed to this
+deployment over a tunnel (Tailscale / Cloudflare Tunnel). Only HTTP crosses the
+tunnel; the raw Oracle port is never exposed, and the Go service connects to
+Oracle with a SELECT-only account.
 
-All queries are read-only — :func:`query` rejects anything that isn't a
-SELECT or WITH-statement and re-checks at the DB level via a read-only
-transaction. The Oracle account used by this client should additionally
-have only SELECT grants on the OPERA schema.
+The public surface is unchanged from the previous python-oracledb client:
+:func:`query` takes the same ``(sql, binds, limit)`` and returns ``list[dict]``
+keyed by lowercase column name, so every OPERA tool and cross-system composite
+keeps working without modification.
+
+Config (env):
+    OPERA_API_BASE_URL   e.g. https://tvrspms.<tailnet>.ts.net
+    OPERA_API_TOKEN      bearer token the Go service requires
+    OPERA_API_PROXY      optional; route ONLY the OPERA call through a proxy, e.g.
+                         socks5h://localhost:1055 to reach the service over a
+                         Tailscale userspace SOCKS5 tunnel (socks5h => DNS is
+                         resolved at the tailscaled end, so the MagicDNS name
+                         resolves over the tailnet). Other upstreams are direct.
 """
 
 import logging
@@ -16,7 +28,7 @@ import os
 import re
 import time
 
-import oracledb
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,6 +40,9 @@ MAX_RETRIES = 3
 RETRY_BACKOFF = 2  # seconds, doubled each retry
 DEFAULT_ROW_LIMIT = 500
 HARD_ROW_LIMIT = 5000
+
+# (connect, read) timeouts for the HTTP call to opera-pms-api.
+HTTP_TIMEOUT = (5, 30)
 
 # Cap how much SQL we write to the logs — queries are normally small, but never
 # log an unbounded statement.
@@ -42,63 +57,23 @@ def _clip(value: object) -> str:
     return text
 
 
-_conn_holder: list[oracledb.Connection | None] = [None]
-_clob_registered = False
-
-
-def _ensure_clob_as_str() -> None:
-    """Make CLOB columns (e.g. NAME$NOTES.NOTES) come back as Python strings."""
-    global _clob_registered
-    if _clob_registered:
-        return
-    if oracledb.CLOB not in oracledb.defaults.fetch_lobs:
-        oracledb.defaults.fetch_lobs = False  # return CLOB/BLOB as str/bytes
-    _clob_registered = True
-
-
-def _connect() -> oracledb.Connection:
-    """Open a new Oracle connection from env vars."""
-    host = os.environ["OPERA_DB_HOST"]
-    port = int(os.environ.get("OPERA_DB_PORT", "1521"))
-    service = os.environ["OPERA_DB_SERVICE_NAME"]
-    user = os.environ["OPERA_DB_USER"]
-    password = os.environ["OPERA_DB_PASSWORD"]
-
-    dsn = oracledb.makedsn(host, port, service_name=service)
-    conn = oracledb.connect(user=user, password=password, dsn=dsn)
-    # Belt-and-suspenders read-only enforcement at the session level.
-    # If the account already lacks DML grants this is a no-op; if it doesn't,
-    # this still blocks accidental writes.
-    try:
-        conn.autocommit = False
-        with conn.cursor() as cur:
-            cur.execute("SET TRANSACTION READ ONLY")
-    except oracledb.DatabaseError:
-        pass
-    return conn
-
-
-def get_connection() -> oracledb.Connection:
-    """Return a healthy Oracle connection (singleton, lazy-init, ping-on-reuse)."""
-    _ensure_clob_as_str()
-    conn = _conn_holder[0]
-    if conn is not None:
-        try:
-            conn.ping()
-            return conn
-        except oracledb.DatabaseError:
-            try:
-                conn.close()
-            except Exception:
-                pass
-            _conn_holder[0] = None
-
-    _conn_holder[0] = _connect()
-    return _conn_holder[0]
+def _api_config() -> tuple[str, str]:
+    """Return (base_url, token), raising a clear error if unconfigured."""
+    base = os.environ.get("OPERA_API_BASE_URL", "").strip()
+    token = os.environ.get("OPERA_API_TOKEN", "").strip()
+    if not base or not token:
+        missing = ", ".join(
+            name
+            for name, val in (("OPERA_API_BASE_URL", base), ("OPERA_API_TOKEN", token))
+            if not val
+        )
+        raise RuntimeError(f"OPERA API not configured (missing: {missing})")
+    return base.rstrip("/"), token
 
 
 # ---------------------------------------------------------------------------
-# Read-only SQL guard
+# Read-only SQL guard (kept client-side as defense-in-depth; the Go service
+# enforces the same guard server-side and runs as a SELECT-only DB user).
 # ---------------------------------------------------------------------------
 
 _FORBIDDEN_KEYWORDS = (
@@ -107,8 +82,6 @@ _FORBIDDEN_KEYWORDS = (
     "BEGIN", "DECLARE", "COMMIT", "ROLLBACK", "SAVEPOINT",
 )
 
-# Strip Oracle line comments (-- to end of line) and block comments (/* ... */)
-# before keyword inspection so that `SELECT 1 -- DROP TABLE x` isn't flagged.
 _LINE_COMMENT_RE = re.compile(r"--[^\n\r]*")
 _BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 _STRING_LITERAL_RE = re.compile(r"'(?:''|[^'])*'", re.DOTALL)
@@ -151,7 +124,7 @@ def assert_read_only(sql: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Query execution
+# Query execution (over HTTP to opera-pms-api)
 # ---------------------------------------------------------------------------
 
 def query(
@@ -160,7 +133,7 @@ def query(
     *,
     limit: int = DEFAULT_ROW_LIMIT,
 ) -> list[dict]:
-    """Run a read-only SELECT against the OPERA Oracle DB and return rows as dicts.
+    """Run a read-only SELECT via opera-pms-api and return rows as dicts.
 
     Args:
         sql: A SELECT or WITH statement. Multiple statements are rejected.
@@ -171,46 +144,76 @@ def query(
         List of dicts keyed by lowercase column name.
 
     Raises:
-        ValueError: if the SQL fails the read-only guard.
-        oracledb.DatabaseError: on connection or syntax errors.
+        ValueError: if the SQL fails the read-only guard (locally or remotely).
+        RuntimeError: on auth/config errors or after exhausting retries.
     """
     assert_read_only(sql)
     capped_limit = min(max(1, limit), HARD_ROW_LIMIT)
-    binds = dict(binds or {})
+    payload = {"sql": sql, "binds": dict(binds or {}), "limit": capped_limit}
+
+    base, token = _api_config()
+    url = f"{base}/query"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    # Route only this call through OPERA_API_PROXY (e.g. the Tailscale SOCKS5
+    # tunnel) if set; leave all other agent-b upstreams direct.
+    proxy = os.environ.get("OPERA_API_PROXY", "").strip()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
 
     last_err: Exception | None = None
     for attempt in range(MAX_RETRIES):
+        will_retry = attempt < MAX_RETRIES - 1
         try:
-            conn = get_connection()
-            with conn.cursor() as cur:
-                cur.arraysize = min(capped_limit, 500)
-                cur.execute(sql, binds)
-                cols = [c[0].lower() for c in cur.description]
-                rows = cur.fetchmany(capped_limit)
-            return [dict(zip(cols, row)) for row in rows]
-        except oracledb.DatabaseError as e:
+            resp = requests.post(
+                url, json=payload, headers=headers, timeout=HTTP_TIMEOUT, proxies=proxies
+            )
+        except requests.RequestException as e:
+            # Network/timeout — transient, retry. Log bind *keys* only (PII).
             last_err = e
-            will_retry = attempt < MAX_RETRIES - 1
-            # Log the offending SQL and the Oracle error so the failure is
-            # diagnosable. Bind *keys* only — bind values may carry guest PII.
             logger.log(
                 logging.WARNING if will_retry else logging.ERROR,
-                "OPERA query failed (attempt %d/%d)%s: %s | sql=%s | binds=%s",
-                attempt + 1,
-                MAX_RETRIES,
+                "OPERA API request failed (attempt %d/%d)%s: %s | sql=%s | binds=%s",
+                attempt + 1, MAX_RETRIES,
                 " — will retry" if will_retry else "",
-                e,
-                _clip(sql),
-                sorted(binds),
+                e, _clip(sql), sorted(payload["binds"]),
             )
-            # Drop the cached connection — next attempt will reconnect.
-            try:
-                if _conn_holder[0] is not None:
-                    _conn_holder[0].close()
-            except Exception:
-                pass
-            _conn_holder[0] = None
             if will_retry:
                 time.sleep(RETRY_BACKOFF * (2 ** attempt))
+            continue
 
-    raise last_err if last_err else RuntimeError("OPERA query failed without exception")
+        # Read-only guard / malformed request — not retryable.
+        if resp.status_code == 400:
+            raise ValueError(f"OPERA API rejected query: {_error_message(resp)}")
+        # Auth/config problem — not retryable.
+        if resp.status_code in (401, 403):
+            raise RuntimeError(
+                f"OPERA API auth failed ({resp.status_code}) — check OPERA_API_TOKEN"
+            )
+        # Server-side / rate-limit — transient, retry.
+        if resp.status_code >= 500 or resp.status_code == 429:
+            last_err = RuntimeError(f"OPERA API {resp.status_code}: {_clip(_error_message(resp))}")
+            logger.log(
+                logging.WARNING if will_retry else logging.ERROR,
+                "OPERA API %d (attempt %d/%d)%s | sql=%s",
+                resp.status_code, attempt + 1, MAX_RETRIES,
+                " — will retry" if will_retry else "", _clip(sql),
+            )
+            if will_retry:
+                time.sleep(RETRY_BACKOFF * (2 ** attempt))
+            continue
+        if not resp.ok:
+            raise RuntimeError(f"OPERA API {resp.status_code}: {_clip(_error_message(resp))}")
+
+        data = resp.json()
+        return data.get("rows", [])
+
+    raise last_err if last_err else RuntimeError("OPERA API query failed without exception")
+
+
+def _error_message(resp: requests.Response) -> str:
+    try:
+        body = resp.json()
+        if isinstance(body, dict) and "error" in body:
+            return str(body["error"])
+    except ValueError:
+        pass
+    return resp.text

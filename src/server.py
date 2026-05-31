@@ -147,11 +147,11 @@ register_cross_tools(mcp)
 register_wine_tools(mcp)
 register_person_tools(mcp)
 
-# OPERA: tools are gated behind OPERA_TOOLS_ENABLED and OFF by default while the
-# OPERA PMS connection is down. The cross-system composites (guest_360_profile,
-# wine_owner_lookup, person_brief) call opera_client directly and already degrade
-# gracefully when OPERA is unavailable, so they're unaffected. Set
-# OPERA_TOOLS_ENABLED=true once the connection is restored.
+# OPERA: tools are gated behind OPERA_TOOLS_ENABLED and OFF by default. OPERA is
+# reached via the opera-pms-api HTTP service (see src/opera_client.py). The
+# guest_360_profile composite calls opera_client directly and wraps it in
+# try/except, so it degrades gracefully when OPERA is unavailable or the API is
+# unconfigured. Set OPERA_TOOLS_ENABLED=true once OPERA_API_BASE_URL/TOKEN are set.
 OPERA_TOOLS_ENABLED = os.getenv("OPERA_TOOLS_ENABLED", "").strip().lower() in (
     "1",
     "true",
