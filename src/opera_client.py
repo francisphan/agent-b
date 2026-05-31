@@ -41,8 +41,13 @@ RETRY_BACKOFF = 2  # seconds, doubled each retry
 DEFAULT_ROW_LIMIT = 500
 HARD_ROW_LIMIT = 5000
 
-# (connect, read) timeouts for the HTTP call to opera-pms-api.
-HTTP_TIMEOUT = (5, 30)
+# Timeout (seconds) for the HTTP call to opera-pms-api. A single scalar on
+# purpose: over a SOCKS proxy (the Railway Tailscale tunnel) PySocks applies one
+# socket timeout to connect+read, so a (connect, read) tuple's small connect
+# value would silently cap reads too (a cold tunnel handshake then trips a 5s
+# "read timeout"). Must exceed the service's QUERY_TIMEOUT_SECONDS (30s) so a
+# server-side 504 comes back instead of the client timing out first.
+HTTP_TIMEOUT = 45
 
 # Cap how much SQL we write to the logs — queries are normally small, but never
 # log an unbounded statement.
