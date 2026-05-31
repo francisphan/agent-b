@@ -22,7 +22,7 @@ def register_tools(mcp):
 
         Only SELECT (or WITH …) statements are accepted; INSERT/UPDATE/DELETE/DDL
         is rejected before the query reaches Oracle. Bind parameters are passed
-        through to oracledb — reference them as :name in the SQL.
+        through to the OPERA API (and on to Oracle) — reference them as :name in the SQL.
 
         Call opera_get_opera_schema first to see available tables, columns, and
         common filters. Always filter reservation tables to RESORT = 'VINES'.

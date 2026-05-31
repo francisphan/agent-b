@@ -1,11 +1,10 @@
-"""Tests for the OPERA read-only SQL guard and schema helpers."""
+"""Tests for the OPERA read-only SQL guard and the HTTP query client."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-import oracledb
 import pytest
+import requests
 
-from src import opera_client
 from src.opera_client import assert_read_only, query
 
 
@@ -82,25 +81,72 @@ class TestAssertReadOnly:
         assert_read_only("SELECT UPDATER_NAME FROM SOME_TABLE")
 
 
-class TestQueryErrorLogging:
-    @patch("src.opera_client.time.sleep")
-    @patch("src.opera_client.get_connection")
-    def test_db_error_logs_sql_and_error(self, mock_conn, _sleep, caplog):
-        opera_client._conn_holder[0] = None
-        mock_conn.side_effect = oracledb.DatabaseError(
-            "ORA-00942: table or view does not exist"
+def _resp(status_code, *, ok=None, json_body=None, text=""):
+    r = MagicMock(spec=requests.Response)
+    r.status_code = status_code
+    r.ok = (status_code < 400) if ok is None else ok
+    r.json.return_value = json_body if json_body is not None else {}
+    r.text = text
+    return r
+
+
+class TestQueryHTTP:
+    @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
+    @patch("src.opera_client.requests.post")
+    def test_success_returns_rows(self, mock_post, _cfg):
+        mock_post.return_value = _resp(200, json_body={"rows": [{"name_id": "1", "first": "A"}]})
+        assert query("SELECT 1 FROM DUAL") == [{"name_id": "1", "first": "A"}]
+
+    @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
+    @patch("src.opera_client.requests.post")
+    def test_empty_rows_default(self, mock_post, _cfg):
+        mock_post.return_value = _resp(200, json_body={})  # no "rows" key
+        assert query("SELECT 1 FROM DUAL") == []
+
+    @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
+    @patch("src.opera_client.requests.post")
+    def test_http_400_guard_rejection_raises_valueerror(self, mock_post, _cfg):
+        mock_post.return_value = _resp(
+            400, json_body={"error": "only SELECT/WITH queries are allowed (got: UPDATE)"}
         )
+        # SQL passes the client-side guard but the server rejects it → ValueError.
+        with pytest.raises(ValueError, match="rejected query"):
+            query("SELECT 1 FROM DUAL")
+        assert mock_post.call_count == 1  # not retried
+
+    @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
+    @patch("src.opera_client.requests.post")
+    def test_http_401_raises_runtimeerror(self, mock_post, _cfg):
+        mock_post.return_value = _resp(401, text="unauthorized")
+        with pytest.raises(RuntimeError, match="auth failed"):
+            query("SELECT 1 FROM DUAL")
+        assert mock_post.call_count == 1  # not retried
+
+    @patch("src.opera_client.time.sleep")
+    @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
+    @patch("src.opera_client.requests.post")
+    def test_network_error_retries_and_logs_without_pii(self, mock_post, _cfg, _sleep, caplog):
+        mock_post.side_effect = requests.ConnectionError("connection refused")
         sql = "SELECT NAME_ID FROM OPERA.NONEXISTENT WHERE LAST = :last"
 
         with caplog.at_level("WARNING", logger="src.opera_client"):
-            with pytest.raises(oracledb.DatabaseError):
+            with pytest.raises(requests.RequestException):
                 query(sql, binds={"last": "Smith"})
 
+        assert mock_post.call_count == 3  # MAX_RETRIES
         # Retried attempts log WARNING; the final attempt logs ERROR.
         assert sum(r.levelname == "WARNING" for r in caplog.records) == 2
         rec = next(r for r in caplog.records if r.levelname == "ERROR")
         msg = rec.getMessage()
-        assert "OPERA.NONEXISTENT" in msg  # the offending SQL
-        assert "ORA-00942" in msg  # the Oracle error
+        assert "OPERA.NONEXISTENT" in msg  # the offending SQL is logged
         assert "['last']" in msg  # bind keys logged
         assert "Smith" not in msg  # bind values (PII) are NOT logged
+
+    @patch("src.opera_client.time.sleep")
+    @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
+    @patch("src.opera_client.requests.post")
+    def test_5xx_retries_then_raises(self, mock_post, _cfg, _sleep):
+        mock_post.return_value = _resp(503, text="upstream down")
+        with pytest.raises(RuntimeError):
+            query("SELECT 1 FROM DUAL")
+        assert mock_post.call_count == 3
