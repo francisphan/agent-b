@@ -37,10 +37,50 @@ logger = logging.getLogger("agent_b.usage")
 # Correlation ID for the current request, taken from the X-Correlation-ID
 # header the Sabueso bot sets per conversation turn. Lets the per-tool logs
 # here be tied back to the bot turn that triggered them.
+#
+# This ContextVar (set by CorrelationIdMiddleware) is only a *fallback*. The
+# primary source is _correlation_from_request(), which reads the header off the
+# SDK's request_ctx — reliable in a way the middleware is not (see that function
+# and the middleware docstring for why).
 correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 # Cap to keep a hostile/garbage header out of the logs unbounded.
 _MAX_CORRELATION_ID = 64
+
+
+def _correlation_from_request() -> str | None:
+    """Read X-Correlation-ID off the active MCP request.
+
+    This is the reliable source for the correlation ID, and the reason the
+    earlier middleware-only approach logged stale or ``None`` IDs:
+
+    With streamable-http, the MCP server's message loop runs in a long-lived
+    task created at session init, *not* in the per-request ASGI task. A
+    ContextVar set by HTTP middleware (CorrelationIdMiddleware) lives in the
+    request task and is therefore invisible to the tool dispatcher — which sees
+    only whatever value was frozen into the loop task's context (a leftover ID
+    from an earlier turn, or the default ``None``).
+
+    The low-level server sets ``request_ctx`` in the *same* task that dispatches
+    the tool handler, and (for HTTP transports) hangs the originating Starlette
+    request off ``RequestContext.request``. Reading the header from there gives
+    us the issuing turn's ID on every tool path. Returns ``None`` for transports
+    without an HTTP request (e.g. stdio).
+    """
+    try:
+        from mcp.server.lowlevel.server import request_ctx
+    except Exception:  # pragma: no cover - SDK layout change
+        return None
+    try:
+        ctx = request_ctx.get()
+    except LookupError:
+        return None
+    request = getattr(ctx, "request", None)
+    headers = getattr(request, "headers", None)
+    if not headers:
+        return None
+    cid = headers.get("x-correlation-id")
+    return cid[:_MAX_CORRELATION_ID] if cid else None
 
 # Per-string-value cap so a giant query or note can't bloat the logs.
 _MAX_VALUE = 500
@@ -142,17 +182,26 @@ def _write_usage_record(record: dict) -> None:
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
-    """Read X-Correlation-ID off each request into a contextvar.
+    """Read X-Correlation-ID off each request into a contextvar (fallback only).
 
-    Added unconditionally (works in both OAuth and static-token modes) so the
-    tool-dispatch logger can stamp every call with the originating bot turn.
+    The dispatcher prefers ``_correlation_from_request()``; this middleware is a
+    backstop. Note it sets the contextvar *unconditionally* (to ``None`` when the
+    header is absent) and resets it after the request, so a header-less request
+    can never leave a stale ID behind for the next one — the bug that made the
+    logs show a previous turn's correlation ID.
+
+    Because Starlette's BaseHTTPMiddleware runs the downstream app in a separate
+    task, the value set here may not reach the tool dispatcher at all; that's
+    exactly why the request_ctx-based reader is the primary source.
     """
 
     async def dispatch(self, request, call_next):
         cid = request.headers.get("x-correlation-id")
-        if cid:
-            correlation_id.set(cid[:_MAX_CORRELATION_ID])
-        return await call_next(request)
+        token = correlation_id.set(cid[:_MAX_CORRELATION_ID] if cid else None)
+        try:
+            return await call_next(request)
+        finally:
+            correlation_id.reset(token)
 
 
 def configure_logging() -> None:
@@ -189,7 +238,11 @@ def instrument(mcp) -> None:
     async def logged_call_tool(name, arguments, *args, **kwargs):
         started = time.monotonic()
         auth = _auth_level()
-        corr = correlation_id.get()
+        # Prefer the per-request read (reliable across the streamable-http task
+        # boundary); fall back to the middleware contextvar for non-HTTP paths.
+        corr = _correlation_from_request()
+        if corr is None:
+            corr = correlation_id.get()
         redacted_args = redact(arguments) if isinstance(arguments, dict) else arguments
         try:
             result = await original_call_tool(name, arguments, *args, **kwargs)

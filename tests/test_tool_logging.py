@@ -140,6 +140,56 @@ class TestInstrument:
         record = json.loads(usage_path.read_text().strip())
         assert record["corr"] is None
 
+    def test_correlation_id_read_from_request_ctx(self, usage_path, caplog):
+        # The dispatcher must read the header off the SDK's request_ctx (set in
+        # the same task as the tool handler), not just the middleware contextvar.
+        from mcp.server.lowlevel.server import request_ctx
+        from mcp.shared.context import RequestContext
+
+        class _Req:
+            headers = {"x-correlation-id": "turn-from-request"}
+
+        mcp = _build_mcp()
+        instrument(mcp)
+
+        token = request_ctx.set(
+            RequestContext("r1", None, None, None, request=_Req())
+        )
+        try:
+            with caplog.at_level("INFO", logger="agent_b.usage"):
+                asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
+        finally:
+            request_ctx.reset(token)
+
+        record = json.loads(usage_path.read_text().strip())
+        assert record["corr"] == "turn-from-request"
+
+    def test_request_ctx_overrides_stale_contextvar(self, usage_path, caplog):
+        # Even if the middleware contextvar holds a stale ID, the per-request
+        # value wins — this is the exact bug that logged a prior turn's ID.
+        from mcp.server.lowlevel.server import request_ctx
+        from mcp.shared.context import RequestContext
+
+        class _Req:
+            headers = {"x-correlation-id": "turn-current"}
+
+        mcp = _build_mcp()
+        instrument(mcp)
+
+        cv_token = tool_logging.correlation_id.set("turn-STALE")
+        rc_token = request_ctx.set(
+            RequestContext("r1", None, None, None, request=_Req())
+        )
+        try:
+            with caplog.at_level("INFO", logger="agent_b.usage"):
+                asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
+        finally:
+            request_ctx.reset(rc_token)
+            tool_logging.correlation_id.reset(cv_token)
+
+        record = json.loads(usage_path.read_text().strip())
+        assert record["corr"] == "turn-current"
+
 
 class TestCorrelationIdMiddleware:
     def test_header_sets_contextvar_for_downstream(self):
@@ -180,3 +230,24 @@ class TestCorrelationIdMiddleware:
 
         got = client.get("/echo", headers={"X-Correlation-ID": "z" * 200}).json()["corr"]
         assert len(got) == 64
+
+    def test_missing_header_does_not_leak_previous_value(self):
+        # A header-less request must reset the contextvar to None rather than
+        # inherit the prior request's ID (the staleness bug).
+        from starlette.applications import Starlette
+        from starlette.responses import JSONResponse
+        from starlette.routing import Route
+        from starlette.testclient import TestClient
+
+        from src.tool_logging import CorrelationIdMiddleware, correlation_id
+
+        async def echo(request):
+            return JSONResponse({"corr": correlation_id.get()})
+
+        app = Starlette(routes=[Route("/echo", echo)])
+        app.add_middleware(CorrelationIdMiddleware)
+        client = TestClient(app)
+
+        assert client.get("/echo", headers={"X-Correlation-ID": "turn-1"}).json()["corr"] == "turn-1"
+        # Next request carries no header — must be None, not "turn-1".
+        assert client.get("/echo").json()["corr"] is None

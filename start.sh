@@ -47,5 +47,20 @@ else
     echo "           direct route to OPERA_API_BASE_URL (and no OPERA_API_PROXY)."
 fi
 
+# Persist the tool-usage analytics JSONL to the attached Railway volume so it
+# survives redeploys (the default .cache path is ephemeral on Railway). Railway
+# injects RAILWAY_VOLUME_MOUNT_PATH for the mounted volume; an explicit
+# TOOL_USAGE_LOG always wins. usage_report.py / request_analyzer.py read this file.
+if [ -z "${TOOL_USAGE_LOG}" ] && [ -n "${RAILWAY_VOLUME_MOUNT_PATH}" ]; then
+    export TOOL_USAGE_LOG="${RAILWAY_VOLUME_MOUNT_PATH}/tool_usage.jsonl"
+fi
+if [ -n "${TOOL_USAGE_LOG}" ]; then
+    mkdir -p "$(dirname "${TOOL_USAGE_LOG}")"
+    echo "[start.sh] Tool-usage analytics -> ${TOOL_USAGE_LOG}"
+else
+    echo "[start.sh] TOOL_USAGE_LOG unset and no volume mounted — usage JSONL is"
+    echo "           ephemeral (.cache). Attach a Railway volume to persist it."
+fi
+
 echo "[start.sh] Launching MCP server"
 exec python -m src

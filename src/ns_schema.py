@@ -24,6 +24,18 @@ SCHEMA: dict[str, dict] = {
             "Maps to Salesforce Account/Contact. Use email or externalId for "
             "cross-system lookups. isPerson=true for individuals."
         ),
+        "geo_filtering_note": (
+            "There is NO usable state/region field on the customer record via SuiteQL, "
+            "and the address sub-records are not reachable for this read-only user: "
+            "customerAddressbook / customerAddressbookEntityAddress return zero rows, "
+            "and the Address table 400s. Do NOT try to join them or filter on a 'state' "
+            "column (it does not exist). The only geography on customer is "
+            "'thirdpartycountry' (a country code like 'US'). "
+            "To list/filter people by US state or region, query SALESFORCE instead: "
+            "Account.BillingState (stored as the FULL name, e.g. 'Texas', not 'TX'). "
+            "If you then need NetSuite owner/wine data for those people, look each up by "
+            "email in customer (LOWER(email) = ...)."
+        ),
         "rest_type": "customer",
         "key_fields": [
             {"name": "id", "type": "integer", "note": "Internal ID"},
@@ -42,12 +54,18 @@ SCHEMA: dict[str, dict] = {
             {"name": "lastModifiedDate", "type": "datetime"},
             {"name": "externalId", "type": "string", "note": "External ID for integrations"},
             {"name": "balance", "type": "currency", "note": "Outstanding balance"},
+            {"name": "thirdpartycountry", "type": "string",
+             "note": "Country code (e.g. 'US') — the ONLY geo field on customer. "
+                     "No state/region is available here; see geo_filtering_note."},
+            {"name": "custentity_vom_ownercode", "type": "string",
+             "note": "Vineyard owner code (e.g. 'BOYH'); non-null marks a wine/vineyard owner."},
         ],
         "suiteql_table": "customer",
         "suiteql_fields": [
             "id", "entityid", "companyname", "firstname", "lastname", "email",
             "phone", "isperson", "datecreated", "lastmodifieddate", "externalid",
-            "balance", "subsidiary", "salesrep",
+            "balance", "subsidiary", "salesrep", "thirdpartycountry",
+            "custentity_vom_ownercode",
         ],
         "example_suiteql": [
             (

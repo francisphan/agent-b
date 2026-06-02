@@ -104,6 +104,14 @@ SCHEMA: dict[str, dict] = {
             {"name": "Description", "type": "textarea"},
             {"name": "IsPersonAccount", "type": "boolean"},
             {"name": "Primary_Language__pc", "type": "picklist", "note": "Custom person account field"},
+            {"name": "BillingState", "type": "string",
+             "note": "Stored as FULL NAME, not the 2-letter code — e.g. 'Texas' (1.5k accts), "
+                     "'California', 'New York', 'Sao Paulo'. Filtering on 'TX' returns ZERO rows. "
+                     "This is the canonical place to filter people by US state/region; NetSuite "
+                     "customers have no queryable state (see ns_schema customer notes)."},
+            {"name": "BillingCity", "type": "string"},
+            {"name": "BillingCountry", "type": "string", "note": "Full name, e.g. 'United States'"},
+            {"name": "ShippingState", "type": "string", "note": "Full name; often blank — prefer BillingState"},
             {"name": "OwnerId", "type": "reference", "referenceTo": "User"},
             {"name": "CreatedDate", "type": "datetime"},
             {"name": "LastModifiedDate", "type": "datetime"},
@@ -133,6 +141,11 @@ SCHEMA: dict[str, dict] = {
                 "(SELECT Id, Name FROM Contacts), "
                 "(SELECT Id, Name, StageName FROM Opportunities) "
                 "FROM Account LIMIT 5"
+            ),
+            (
+                "-- People in a US state: BillingState is the FULL name, not 'TX'\n"
+                "SELECT Id, Name, PersonEmail, BillingCity "
+                "FROM Account WHERE BillingState = 'Texas' ORDER BY BillingCity"
             ),
         ],
     },
