@@ -182,43 +182,23 @@ class _SelectiveRegistrar:
         return getattr(self._mcp, name)
 
 
-# High-value read tools kept on the live surface by default. The rest of the
-# Pardot read tools stay defined in code but parked (see server.py).
+# The lean default surface: only the Pardot reads that earn their place for
+# ad-hoc guest/marketing lookups by the Sabueso bot. The remaining reads (prospect
+# accounts, lists, visits, emails, lifecycle, tags) and ALL writes stay defined in
+# code but off the live surface unless PARDOT_TOOLS_ENABLED=true restores the full
+# set. Rationale: the cross-system composites (person_brief, guest_360_profile)
+# call pardot_client directly, so the broad MCP read surface went unused — see
+# server.py's PARDOT_TOOLS_ENABLED block.
 CURATED_READ_TOOLS = frozenset(
     {
-        # Prospects
+        # Prospect lookup — the core "who is this person in Pardot" query
         "pardot_get_prospect",
         "pardot_query_prospects",
-        # Prospect accounts
-        "pardot_get_prospect_account",
-        "pardot_query_prospect_accounts",
-        # Lists & memberships
-        "pardot_query_lists",
-        "pardot_get_list",
-        "pardot_query_list_memberships",
-        # Campaigns
-        "pardot_query_campaigns",
-        "pardot_get_campaign",
-        # Visitor activity
-        "pardot_query_visitors",
-        "pardot_get_visitor",
-        "pardot_query_visits",
-        "pardot_get_visit",
+        # Engagement signals — what has this prospect/visitor done
         "pardot_query_visitor_activities",
         "pardot_get_visitor_activity",
-        # Emails
-        "pardot_query_emails",
-        "pardot_get_email",
-        "pardot_get_list_email_stats",
-        # Lifecycle
-        "pardot_get_lifecycle_stage",
-        "pardot_query_lifecycle_stages",
-        "pardot_get_lifecycle_history",
-        "pardot_query_lifecycle_histories",
-        # Tags
-        "pardot_query_tags",
-        "pardot_get_tag",
-        "pardot_query_tagged_objects",
+        # Campaign context
+        "pardot_query_campaigns",
     }
 )
 
