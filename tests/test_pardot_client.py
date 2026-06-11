@@ -1,12 +1,10 @@
 """Tests for src/pardot_client.py."""
 
-import time
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 import requests
 
-from src import pardot_client
 from src.pardot_client import (
     BASE_URL,
     _build_session,
@@ -196,6 +194,7 @@ class TestQueryFunctions:
         mock_get.return_value = {"id": "42"}
         result = get_prospect("42")
         mock_get.assert_called_once_with("prospects/42", params=None)
+        assert result == {"id": "42"}
 
     @patch("src.pardot_client._get")
     def test_query_lists(self, mock_get):

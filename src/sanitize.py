@@ -39,13 +39,38 @@ def escape_soql_like(value: str) -> str:
 def escape_suiteql(value: str) -> str:
     """Escape a string value for safe interpolation into a SuiteQL query.
 
-    SuiteQL follows standard SQL escaping: single quotes are doubled.
-    Backslashes are also doubled to prevent escape-sequence tricks, and null
-    bytes are stripped.
+    SuiteQL follows standard SQL escaping: single quotes are doubled (the actual
+    injection boundary in Oracle string literals) and null bytes are stripped.
+    Backslashes are left alone — Oracle treats them literally in string
+    literals, so doubling them would corrupt equality comparisons
+    (``'a\\b' = 'a\\\\b'`` is FALSE in SuiteQL, verified against the live
+    endpoint).
+
+    NOTE: This does NOT escape ``%`` and ``_`` wildcards used in ``LIKE`` clauses.
+    If you need LIKE-safe escaping, call :func:`escape_suiteql_like` instead.
     """
-    value = value.replace("\\", "\\\\")
     value = value.replace("'", "''")
     value = value.replace("\0", "")
+    return value
+
+
+def escape_suiteql_like(value: str) -> str:
+    r"""Escape a string value for safe interpolation into a SuiteQL ``LIKE`` clause.
+
+    Escapes everything :func:`escape_suiteql` does, plus — using backslash as
+    the escape character — doubles backslashes and prefixes the ``%`` and ``_``
+    wildcards. Unlike SOQL, SuiteQL/Oracle has no default escape character, so
+    the containing clause MUST declare it, e.g.
+    ``... LIKE '%{escaped}%' ESCAPE '\'``.
+
+    The ESCAPE operand must be exactly one character — Oracle rejects longer
+    strings — so in Python source the clause is written ``ESCAPE '\\'``
+    (rendering to ``ESCAPE '\'`` in SQL). Don't "fix" it to four backslashes.
+    """
+    value = value.replace("\\", "\\\\")  # literal \ -> \\ (= escaped backslash)
+    value = escape_suiteql(value)
+    value = value.replace("%", "\\%")
+    value = value.replace("_", "\\_")
     return value
 
 

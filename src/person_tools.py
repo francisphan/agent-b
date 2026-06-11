@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import re
 
-from src.sanitize import escape_soql, escape_soql_like, escape_suiteql
+from src.sanitize import escape_soql, escape_soql_like, escape_suiteql, escape_suiteql_like
 from src.sf_client import query as sf_query, record_url
 from src.ns_client import suiteql_query
 from src.cross_tools import guest_360
@@ -112,12 +112,14 @@ def _ns_owner_summary(row: dict) -> dict:
 
 
 def _ns_customers_by_name(anchor: str) -> list[dict]:
-    a = escape_suiteql(anchor.lower())
+    a = escape_suiteql_like(anchor.lower())
     try:
         rows = suiteql_query(
             f"SELECT {_NS_OWNER_COLS} FROM customer "
-            f"WHERE LOWER(entityid) LIKE '%{a}%' OR LOWER(companyname) LIKE '%{a}%' "
-            f"OR LOWER(firstname) LIKE '%{a}%' OR LOWER(lastname) LIKE '%{a}%' "
+            f"WHERE LOWER(entityid) LIKE '%{a}%' ESCAPE '\\' "
+            f"OR LOWER(companyname) LIKE '%{a}%' ESCAPE '\\' "
+            f"OR LOWER(firstname) LIKE '%{a}%' ESCAPE '\\' "
+            f"OR LOWER(lastname) LIKE '%{a}%' ESCAPE '\\' "
             f"FETCH FIRST 50 ROWS ONLY"
         )
     except Exception as e:  # noqa: BLE001 — surface as no-match, not a 500
