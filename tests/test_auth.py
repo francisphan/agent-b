@@ -2,7 +2,6 @@
 
 import asyncio
 import types
-from unittest.mock import patch
 
 import pytest
 from starlette.responses import JSONResponse

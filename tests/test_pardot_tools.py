@@ -123,6 +123,7 @@ class TestQueryProspects:
         mock_qp.assert_called_once_with(
             {"fields": "email,firstName", "orderBy": "created_at", "limit": 50}
         )
+        assert result == {"values": []}
 
     @patch("src.pardot_tools.query_prospects")
     def test_error(self, mock_qp, mcp_with_tools):
@@ -152,6 +153,7 @@ class TestQueryLists:
         mock_ql.return_value = {"values": [{"id": "1", "name": "Test"}]}
         result = mcp_with_tools["pardot_query_lists"]()
         mock_ql.assert_called_once_with({"fields": DEFAULT_LIST_FIELDS})
+        assert result == {"values": [{"id": "1", "name": "Test"}]}
 
     @patch("src.pardot_tools.query_lists")
     def test_error(self, mock_ql, mcp_with_tools):

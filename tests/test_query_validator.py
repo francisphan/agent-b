@@ -1,6 +1,5 @@
 """Tests for query_validator module."""
 
-import pytest
 
 from src.query_validator import (
     validate_soql,

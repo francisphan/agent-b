@@ -6,7 +6,7 @@ from src.sf_client import (
 )
 from src.sanitize import escape_soql
 from src.schema_cache import schema_cache
-from src.sf_schema import SCHEMA, OBJECT_NAMES
+from src.sf_schema import SCHEMA
 from src.query_validator import validate_soql, enhance_sf_error
 
 
