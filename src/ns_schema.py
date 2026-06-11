@@ -53,7 +53,11 @@ SCHEMA: dict[str, dict] = {
             {"name": "dateCreated", "type": "datetime"},
             {"name": "lastModifiedDate", "type": "datetime"},
             {"name": "externalId", "type": "string", "note": "External ID for integrations"},
-            {"name": "balance", "type": "currency", "note": "Outstanding balance"},
+            {"name": "balance", "type": "currency",
+             "note": "Outstanding balance. REST field only — in SuiteQL the column "
+                     "is 'balancesearch' (use 'balancesearch AS balance'); a bare "
+                     "'balance' identifier is a 400. Overdue portion: "
+                     "'overduebalancesearch'."},
             {"name": "thirdpartycountry", "type": "string",
              "note": "Country code (e.g. 'US') — the ONLY geo field on customer. "
                      "No state/region is available here; see geo_filtering_note."},
@@ -64,27 +68,28 @@ SCHEMA: dict[str, dict] = {
         "suiteql_fields": [
             "id", "entityid", "companyname", "firstname", "lastname", "email",
             "phone", "isperson", "datecreated", "lastmodifieddate", "externalid",
-            "balance", "subsidiary", "salesrep", "thirdpartycountry",
+            "balancesearch", "overduebalancesearch", "subsidiary", "salesrep",
+            "thirdpartycountry",
             "custentity_vom_ownercode",
         ],
         "example_suiteql": [
             (
                 "SELECT id, entityid, companyname, firstname, lastname, email, phone, "
-                "isperson, balance "
+                "isperson, balancesearch AS balance "
                 "FROM customer "
                 "WHERE email IS NOT NULL "
                 "ORDER BY lastmodifieddate DESC"
             ),
             (
-                "SELECT id, entityid, email, balance "
+                "SELECT id, entityid, email, balancesearch AS balance "
                 "FROM customer "
                 "WHERE LOWER(email) = 'guest@example.com'"
             ),
             (
-                "SELECT id, companyname, email, balance "
+                "SELECT id, companyname, email, balancesearch AS balance "
                 "FROM customer "
-                "WHERE isperson = 'T' AND balance > 0 "
-                "ORDER BY balance DESC"
+                "WHERE isperson = 'T' AND balancesearch > 0 "
+                "ORDER BY balancesearch DESC"
             ),
         ],
     },
