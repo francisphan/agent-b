@@ -42,7 +42,7 @@ def lookup_guest(email: str) -> dict:
     try:
         ns_records = suiteql_query(
             f"SELECT id, entityid, companyname, firstname, lastname, email, "
-            f"phone, isperson, balance "
+            f"phone, isperson, balancesearch AS balance "
             f"FROM customer "
             f"WHERE LOWER(email) = '{escape_suiteql(email_lower)}'"
         )
@@ -129,7 +129,7 @@ def guest_360(email: str) -> dict:
     try:
         customers = suiteql_query(
             f"SELECT id, entityid, companyname, firstname, lastname, email, "
-            f"phone, isperson, balance "
+            f"phone, isperson, balancesearch AS balance "
             f"FROM customer "
             f"WHERE LOWER(email) = '{escape_suiteql(email_lower)}'"
         )

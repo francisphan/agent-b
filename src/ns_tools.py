@@ -23,6 +23,11 @@ def register_tools(mcp):
         Key tables: customer, transaction (filter by type: SalesOrd, CustInvc, etc.),
         transactionline, item, vendor, employee, contact.
 
+        Column gotchas (these differ from the REST field names and 400 otherwise):
+        the row id is 'id' (NOT 'internalid'); customer has no 'name' column (use
+        entityid / companyname / firstname / lastname); customer balance is
+        'balancesearch' / 'overduebalancesearch' (NOT 'balance').
+
         Use ns_get_netsuite_schema to explore fields, tables, and example SuiteQL before querying.
 
         Pagination: By default, all pages are fetched and concatenated. To paginate manually,

@@ -18,6 +18,19 @@ class TestNsSchemaModule:
     def test_record_type_names_sorted(self):
         assert RECORD_TYPE_NAMES == sorted(RECORD_TYPE_NAMES)
 
+    def test_customer_suiteql_uses_real_balance_column(self):
+        """'balance' is a REST-only field; the SuiteQL column is 'balancesearch'.
+        A bare 'balance' identifier 400s (verified against the live endpoint) —
+        and it broke guest_360's whole NetSuite section in prod."""
+        cust = SCHEMA["customer"]
+        assert "balancesearch" in cust["suiteql_fields"]
+        assert "balance" not in cust["suiteql_fields"]
+        for example in cust["example_suiteql"]:
+            # Aliasing balancesearch AS balance is fine; selecting/filtering on a
+            # bare `balance` source column is the regression.
+            cleaned = example.replace("AS balance", "")
+            assert " balance " not in f" {cleaned} ".replace(",", " , "), example
+
     def test_each_record_has_required_keys(self):
         for name, obj in SCHEMA.items():
             assert "label" in obj, f"{name} missing label"
