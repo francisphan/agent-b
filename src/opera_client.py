@@ -69,6 +69,23 @@ def _clip(value: object) -> str:
     return text
 
 
+def opera_enabled() -> bool:
+    """Whether OPERA access is switched on (the OPERA_TOOLS_ENABLED env flag).
+
+    The single definition of the gate, so one flag governs every path:
+    server.py checks it at registration time for the opera_* tools, and
+    query() checks it per-call for the cross-system composites
+    (guest_360_profile etc., which call query() directly and bypass tool
+    registration). When off, query() short-circuits here instead of attempting
+    the possibly-dead tunnel — the composites' try/except then degrades
+    gracefully, and instantly."""
+    return os.environ.get("OPERA_TOOLS_ENABLED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
 def _api_config() -> tuple[str, str]:
     """Return (base_url, token), raising a clear error if unconfigured."""
     base = os.environ.get("OPERA_API_BASE_URL", "").strip()
@@ -157,8 +174,14 @@ def query(
 
     Raises:
         ValueError: if the SQL fails the read-only guard (locally or remotely).
-        RuntimeError: on auth/config errors or after exhausting retries.
+        RuntimeError: if OPERA access is disabled (OPERA_TOOLS_ENABLED off), or
+            on auth/config errors, or after exhausting retries.
     """
+    if not opera_enabled():
+        raise RuntimeError(
+            "OPERA access is disabled (OPERA_TOOLS_ENABLED is off) — refusing to "
+            "call opera-pms-api."
+        )
     assert_read_only(sql)
     capped_limit = min(max(1, limit), HARD_ROW_LIMIT)
     payload = {"sql": sql, "binds": dict(binds or {}), "limit": capped_limit}

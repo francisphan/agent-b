@@ -91,6 +91,19 @@ def _resp(status_code, *, ok=None, json_body=None, text=""):
 
 
 class TestQueryHTTP:
+    @pytest.fixture(autouse=True)
+    def _enable_opera(self, monkeypatch):
+        # The HTTP path assumes OPERA is switched on; query() now gates on this.
+        monkeypatch.setenv("OPERA_TOOLS_ENABLED", "true")
+
+    @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
+    @patch("src.opera_client._session.post")
+    def test_disabled_short_circuits_without_http(self, mock_post, _cfg, monkeypatch):
+        monkeypatch.setenv("OPERA_TOOLS_ENABLED", "false")
+        with pytest.raises(RuntimeError, match="disabled"):
+            query("SELECT 1 FROM DUAL")
+        mock_post.assert_not_called()
+
     @patch("src.opera_client._api_config", return_value=("http://opera-api.test", "tok"))
     @patch("src.opera_client._session.post")
     def test_success_returns_rows(self, mock_post, _cfg):

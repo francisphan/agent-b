@@ -152,12 +152,11 @@ register_person_tools(mcp)
 # guest_360_profile composite calls opera_client directly and wraps it in
 # try/except, so it degrades gracefully when OPERA is unavailable or the API is
 # unconfigured. Set OPERA_TOOLS_ENABLED=true once OPERA_API_BASE_URL/TOKEN are set.
-OPERA_TOOLS_ENABLED = os.getenv("OPERA_TOOLS_ENABLED", "").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
-if OPERA_TOOLS_ENABLED:
+# opera_client.opera_enabled() is the single definition of the flag — query()
+# also checks it per-call, covering the composites that bypass registration.
+from src.opera_client import opera_enabled  # noqa: E402
+
+if opera_enabled():
     register_opera_tools(mcp)
     logger.info("OPERA MCP tools: enabled")
 else:
