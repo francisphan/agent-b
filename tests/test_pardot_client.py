@@ -455,3 +455,41 @@ class TestErrorLogging:
 
         assert any(r.levelname == "WARNING" for r in caplog.records)
         assert "will retry" in caplog.text
+
+
+class TestGetErrorClipAndPersistent401:
+    """Review fixes: 500-char marked clip; persistent 401 raises the HTTPError."""
+
+    @patch("src.pardot_client._with_retry")
+    def test_get_error_body_clipped_with_marker(self, mock_retry, mock_env, mock_sf):
+        resp = MagicMock()
+        resp.ok = False
+        resp.status_code = 400
+        resp.reason = "Bad Request"
+        resp.text = "x" * 600
+        session = MagicMock()
+        session.get.return_value = resp
+        mock_retry.side_effect = lambda func: func(session)
+
+        with pytest.raises(requests.exceptions.HTTPError) as exc_info:
+            _get("prospects")
+        assert "(+100 chars)" in str(exc_info.value)  # 600 - 500, marked
+
+    @patch("src.pardot_client._refresh_session")
+    def test_persistent_401_raises_http_error_not_typeerror(
+        self, mock_refresh, mock_env, mock_sf
+    ):
+        # If re-auth never fixes the 401, the retry loop must raise the real
+        # HTTPError (carrying "Invalid scope" etc.), not TypeError(None).
+        resp = MagicMock()
+        resp.ok = False
+        resp.status_code = 401
+        resp.reason = "Unauthorized"
+        resp.text = '{"code": 184, "message": "Invalid scope"}'
+        session = MagicMock()
+        session.get.return_value = resp
+
+        with patch("src.pardot_client.get_session", return_value=session):
+            with pytest.raises(requests.exceptions.HTTPError) as exc_info:
+                _get("prospects")
+        assert "Invalid scope" in str(exc_info.value)

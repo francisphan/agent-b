@@ -195,7 +195,8 @@ class NetSuiteClient:
                 text = ""
             if text:
                 message = f"{message}: {_clip(text, _MAX_ERROR_DETAIL)}"
-            return NetSuiteError(message, status=response.status_code)
+            exc_class = STATUS_EXCEPTION_MAP.get(response.status_code, NetSuiteError)
+            return exc_class(message, status=response.status_code)
 
         exc_class = STATUS_EXCEPTION_MAP.get(response.status_code, NetSuiteError)
         kwargs: dict[str, Any] = {
@@ -209,14 +210,24 @@ class NetSuiteClient:
         # Fold NetSuite's o:errorDetails[].detail into the message. Without it the
         # caller only sees the generic title (e.g. "Bad Request") and can't tell a
         # SQL syntax error from a bad field name. error_details stays on the
-        # exception for programmatic use.
+        # exception for programmatic use. Each detail is clipped individually
+        # (not the joined string) so a long first detail can't crowd out a
+        # concise, actionable later one.
         prefix = error_resp.title or f"HTTP {response.status_code}"
-        details = "; ".join(
-            d.detail.strip() for d in error_resp.error_details if d.detail.strip()
-        )
-        message = (
-            f"{prefix}: {_clip(details, _MAX_ERROR_DETAIL)}" if details else prefix
-        )
+        stripped = [s for d in error_resp.error_details if (s := d.detail.strip())]
+        details = "; ".join(_clip(s, _MAX_ERROR_DETAIL) for s in stripped[:3])
+        if len(stripped) > 3:
+            details += f" (+{len(stripped) - 3} more details)"
+        if details:
+            message = f"{prefix}: {details}"
+        elif not error_resp.title:
+            # Valid JSON but not the {title, o:errorDetails} envelope (e.g. a
+            # RESTlet-style {"message": ...}): surface the raw body rather than
+            # collapsing to a bare status line.
+            text = response.text.strip()
+            message = f"{prefix}: {_clip(text, _MAX_ERROR_DETAIL)}" if text else prefix
+        else:
+            message = prefix
         return exc_class(message, **kwargs)
 
     def close(self) -> None:
