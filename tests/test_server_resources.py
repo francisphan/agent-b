@@ -49,6 +49,14 @@ class TestResources:
         assert "suiteql_tips" in result
         assert "cross_system" in result
 
+    def test_suiteql_tips_include_row_limiting(self):
+        from src.server import query_patterns_resource
+        result = json.loads(query_patterns_resource())
+        tips = " ".join(result["suiteql_tips"])
+        # SuiteQL LIMIT keyword is invalid — the guide must steer to FETCH FIRST.
+        assert "FETCH FIRST" in tips
+        assert "LIMIT" in tips
+
 
 class TestPrompts:
     def test_guest_arrivals_prompt(self):

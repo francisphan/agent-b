@@ -27,15 +27,18 @@ RETRY_BACKOFF = 2  # seconds, doubled each retry
 # Cap how much of an error body we write to the logs — never log an unbounded
 # response (it may be large or carry PII).
 _MAX_LOG_BODY = 2000
+# Tighter cap for error bodies folded into exception MESSAGES, which flow back
+# to LLM callers as {"error": str(e)} — matches the NetSuite client's cap.
+_MAX_ERROR_DETAIL = 500
 
 _pardot_session: list[requests.Session | None] = [None]
 
 
-def _clip(value: object) -> str:
+def _clip(value: object, limit: int = _MAX_LOG_BODY) -> str:
     """Render a value for logging, truncated to a safe length."""
     text = value if isinstance(value, str) else str(value)
-    if len(text) > _MAX_LOG_BODY:
-        return f"{text[:_MAX_LOG_BODY]}… (+{len(text) - _MAX_LOG_BODY} chars)"
+    if len(text) > limit:
+        return f"{text[:limit]}… (+{len(text) - limit} chars)"
     return text
 
 
@@ -169,6 +172,9 @@ def _with_retry(func):
             if e.response is not None:
                 status = e.response.status_code
                 if status == 401:
+                    # Keep the exception: if re-auth never fixes the 401, the
+                    # loop exhausts and must raise this (not a None TypeError).
+                    last_exc = e
                     _refresh_session()
                     session = get_session()
                     continue
@@ -196,7 +202,16 @@ def _get(endpoint: str, params: dict | None = None) -> dict | list:
 
     def _do(session):
         resp = session.get(f"{BASE_URL}/{endpoint}", params=params)
-        resp.raise_for_status()
+        if not resp.ok:
+            # Embed the response body in the message so the caller sees Pardot's
+            # actual complaint (e.g. "Invalid scope"), not a bare HTTP line.
+            # Keep response= attached so _with_retry still re-auths on 401 and
+            # skips retrying other 4xx.
+            error_body = _clip(resp.text, _MAX_ERROR_DETAIL) if resp.text else "(empty)"
+            prefix = f"{resp.status_code} {resp.reason}" if resp.reason else str(resp.status_code)
+            raise requests.exceptions.HTTPError(
+                f"{prefix}: {error_body}", response=resp
+            )
         return resp.json()
 
     return _with_retry(_do)
