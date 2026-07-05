@@ -2,7 +2,13 @@
 
 import pytest
 
-from src.ns_schema import SCHEMA, RECORD_TYPE_NAMES, SUITEQL_TABLES, get_schema
+from src.ns_schema import (
+    SCHEMA,
+    RECORD_TYPE_NAMES,
+    SUITEQL_TABLES,
+    GLOBAL_TIPS,
+    get_schema,
+)
 
 
 class TestNsSchemaModule:
@@ -67,6 +73,26 @@ class TestNsSchemaModule:
             get_schema("fakeRecord")
 
 
+class TestNsGlobalTips:
+    """The GLOBAL_TIPS block mirrors opera_schema.GLOBAL_TIPS (flat list of str)."""
+
+    def test_is_nonempty_list_of_str(self):
+        assert isinstance(GLOBAL_TIPS, list)
+        assert GLOBAL_TIPS
+        assert all(isinstance(tip, str) for tip in GLOBAL_TIPS)
+
+    def test_covers_limit_fetch_first(self):
+        joined = " ".join(GLOBAL_TIPS)
+        assert "LIMIT" in joined
+        assert "FETCH FIRST" in joined
+
+    def test_covers_known_gotchas(self):
+        joined = " ".join(GLOBAL_TIPS)
+        assert "internalid" in joined  # id, not internalid
+        assert "balancesearch" in joined  # balance gotcha
+        assert "companyname" in joined  # customer has no 'name' column
+
+
 class TestNsGetNetsuiteSchema:
     """Tests for the ns_get_netsuite_schema tool function."""
 
@@ -90,24 +116,31 @@ class TestNsGetNetsuiteSchema:
 
     def test_returns_full_schema_when_empty(self, get_schema_tool):
         result = get_schema_tool(record_types="")
-        assert result is SCHEMA
+        # Full schema plus a cross-table tips block (mirrors opera schema tool).
+        assert set(SCHEMA.keys()).issubset(result.keys())
+        assert result["_tips"] == GLOBAL_TIPS
 
     def test_returns_filtered_single(self, get_schema_tool):
         result = get_schema_tool(record_types="customer")
         assert "customer" in result
-        assert len(result) == 1
+        assert set(result.keys()) == {"customer", "_tips"}
 
     def test_returns_filtered_multiple(self, get_schema_tool):
         result = get_schema_tool(record_types="customer,salesOrder,invoice")
-        assert set(result.keys()) == {"customer", "salesOrder", "invoice"}
+        assert set(result.keys()) == {"customer", "salesOrder", "invoice", "_tips"}
+
+    def test_tips_included_in_filtered_result(self, get_schema_tool):
+        result = get_schema_tool(record_types="customer")
+        assert result["_tips"] == GLOBAL_TIPS
 
     def test_unknown_silently_omitted(self, get_schema_tool):
         result = get_schema_tool(record_types="fakeType")
-        assert result == {}
+        # No record types match, but the tips block is always present.
+        assert set(result.keys()) == {"_tips"}
 
     def test_mixed_known_and_unknown(self, get_schema_tool):
         result = get_schema_tool(record_types="customer,fakeType,item")
-        assert set(result.keys()) == {"customer", "item"}
+        assert set(result.keys()) == {"customer", "item", "_tips"}
 
     def test_case_insensitive(self, get_schema_tool):
         result = get_schema_tool(record_types="CUSTOMER,SalesOrder")

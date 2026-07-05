@@ -169,6 +169,24 @@ def validate_suiteql(query: str) -> dict:
     """
     result = {"valid": True, "warnings": [], "suggestions": []}
 
+    # SuiteQL is Oracle SQL and rejects the MySQL/Postgres 'LIMIT n' clause with a
+    # "syntax error ... near: LIMIT" 400. Flag a LIMIT keyword followed by a number
+    # (word-boundary match, so a column like 'credit_limit' or 'limits' is not hit).
+    # A LIMIT inside a string literal is an accepted, ignored false positive — we do
+    # not parse SQL here, just pattern-match.
+    if re.search(r"\bLIMIT\s+\d+", query, re.IGNORECASE):
+        result["valid"] = False
+        result["warnings"].append(
+            "SuiteQL does not support the SQL 'LIMIT' keyword (it is Oracle SQL) — "
+            "'LIMIT n' fails with a syntax error near 'LIMIT'."
+        )
+        result["suggestions"].append(
+            "Use 'FETCH FIRST n ROWS ONLY' for a top-N (e.g. "
+            "'... ORDER BY t.trandate DESC FETCH FIRST 50 ROWS ONLY'), or pass the "
+            "ns_suiteql_query 'limit' parameter, which paginates server-side."
+        )
+        return result
+
     tables = _extract_suiteql_tables(query)
     if not tables:
         result["valid"] = False

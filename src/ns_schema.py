@@ -346,6 +346,27 @@ SCHEMA: dict[str, dict] = {
     },
 }
 
+# Cross-table SuiteQL guidance surfaced by the ns_get_netsuite_schema tool.
+# Mirrors opera_schema.GLOBAL_TIPS (a flat list of plain-string tips). These are
+# the gotchas that make LLM-authored SuiteQL 400 against the live endpoint.
+GLOBAL_TIPS: list[str] = [
+    "Row limiting: SuiteQL (Oracle) does NOT support the SQL 'LIMIT'/'OFFSET' "
+    "keywords — 'LIMIT n' 400s with a syntax error near 'LIMIT'. Use "
+    "'FETCH FIRST n ROWS ONLY' for a top-N in the SQL, or pass the tool's "
+    "'limit' parameter (which paginates server-side).",
+    "The row id column is 'id', NOT 'internalid' — a bare 'internalid' 400s.",
+    "Customer balance is 'balancesearch' (overdue portion 'overduebalancesearch'), "
+    "NOT 'balance'. Alias it as 'balancesearch AS balance'.",
+    "The customer table has no 'name' column — use entityid / companyname / "
+    "firstname / lastname.",
+    "All transaction types share the 'transaction' table — filter by the 'type' "
+    "column (SalesOrd, CustInvc, CustPymt, VendBill, PurchOrd, Journal).",
+    "Booleans compare against 'T'/'F' strings, not true/false.",
+    "String compares are case-sensitive — wrap with LOWER() for case-insensitive "
+    "matching. Dates: TO_DATE('2025-01-01', 'YYYY-MM-DD'), SYSDATE.",
+]
+
+
 # Convenience lookups
 RECORD_TYPE_NAMES = sorted(SCHEMA.keys())
 

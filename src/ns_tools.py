@@ -7,7 +7,7 @@ from src.ns_client import (
     suiteql_query_page,
 )
 from src.schema_cache import schema_cache
-from src.ns_schema import SCHEMA as NS_SCHEMA
+from src.ns_schema import SCHEMA as NS_SCHEMA, GLOBAL_TIPS as NS_TIPS
 from src.query_validator import validate_suiteql, enhance_ns_error
 
 
@@ -28,6 +28,12 @@ def register_tools(mcp):
         entityid / companyname / firstname / lastname); customer balance is
         'balancesearch' / 'overduebalancesearch' (NOT 'balance').
 
+        Row limiting: SuiteQL is Oracle SQL and does NOT support the 'LIMIT'/'OFFSET'
+        keywords — appending "LIMIT 50" 400s with a syntax error near 'LIMIT'. To cap
+        rows, either write 'FETCH FIRST n ROWS ONLY' inside the SQL (e.g. "... ORDER BY
+        t.trandate DESC FETCH FIRST 50 ROWS ONLY") or pass the 'limit' parameter below
+        (which paginates server-side).
+
         Use ns_get_netsuite_schema to explore fields, tables, and example SuiteQL before querying.
 
         Pagination: By default, all pages are fetched and concatenated. To paginate manually,
@@ -45,8 +51,16 @@ def register_tools(mcp):
             If offset > 0: a dict with 'items', 'hasMore', 'offset', and 'totalResults'.
             On failure: a single-element list or dict with an error message.
         """
-        # Pre-flight validation
+        # Pre-flight validation. A hard-invalid query (e.g. a SQL LIMIT clause,
+        # which SuiteQL rejects) is short-circuited here so the actionable message
+        # reaches the caller instead of a raw NetSuite 400.
         validation = validate_suiteql(query)
+        if not validation["valid"]:
+            return {
+                "error": "; ".join(validation["warnings"]) or "Invalid SuiteQL query.",
+                "warnings": validation["warnings"],
+                "suggestions": validation["suggestions"],
+            }
 
         try:
             if offset > 0:
@@ -163,13 +177,14 @@ def register_tools(mcp):
                           If empty, returns schema for all curated record types.
 
         Returns:
-            A dict keyed by record type with field, table, and example query info.
+            A dict keyed by record type with field, table, and example query info,
+            plus a "_tips" key with cross-table SuiteQL gotchas (LIMIT, id, balance).
             Unknown types are silently omitted.
         """
         if not record_types.strip():
-            return NS_SCHEMA
+            return {**NS_SCHEMA, "_tips": NS_TIPS}
 
-        result = {}
+        result: dict = {}
         for name in record_types.split(","):
             name = name.strip()
             if not name:
@@ -179,4 +194,5 @@ def register_tools(mcp):
                     result[schema_name] = schema_data
                     break
 
+        result["_tips"] = NS_TIPS
         return result

@@ -318,6 +318,9 @@ def query_patterns_resource() -> str:
         ],
         "suiteql_tips": [
             "Use ns_get_netsuite_schema before writing SuiteQL to discover table/field names",
+            "Row limiting: SuiteQL is Oracle SQL — the 'LIMIT'/'OFFSET' keywords are invalid "
+            "and 400 with a syntax error near 'LIMIT'. Use 'FETCH FIRST n ROWS ONLY' or the "
+            "ns_suiteql_query 'limit' parameter",
             "All transactions live in 'transaction' table — filter by type column",
             "Transaction type codes: SalesOrd, CustInvc, CustPymt, VendBill, PurchOrd, Journal",
             "Line items: JOIN transactionline tl ON t.id = tl.transaction",
