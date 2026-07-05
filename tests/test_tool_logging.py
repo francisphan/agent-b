@@ -74,6 +74,16 @@ def _build_mcp():
         # Composite with a partial (per-leg) failure.
         return {"ok_part": 1, "_errors": ["Salesforce: nope", "OPERA: down"]}
 
+    @mcp.tool()
+    def data_rows() -> list:
+        # A multi-row data result whose first row has a column named "error"
+        # (e.g. a log/audit table) — must NOT be classified as a failure.
+        return [{"error": "some log text", "id": 1}, {"id": 2}]
+
+    @mcp.tool()
+    def raises_with_email(email: str = "") -> dict:
+        raise ValueError(f"no record for {email}")
+
     return mcp
 
 
@@ -223,14 +233,25 @@ class TestClassifyResult:
         assert tool_logging._classify_result({"error": None}) == ("ok", None)
         assert tool_logging._classify_result({"error": ""}) == ("ok", None)
 
-    def test_raw_list_error_first_element(self):
+    def test_single_element_error_list(self):
+        # The ns_tools/opera_tools convention: [{"error": ...}].
         status, snip = tool_logging._classify_result([{"error": "list boom"}])
         assert status == "error"
         assert snip == "list boom"
 
-    def test_raw_list_of_data_rows_is_ok(self):
+    def test_multi_row_list_is_ok(self):
         # A normal multi-row list result (no leading error dict) stays ok.
         assert tool_logging._classify_result([{"id": 1}, {"id": 2}]) == ("ok", None)
+
+    def test_multi_row_with_error_column_is_ok(self):
+        # Regression: a multi-row data result whose first row has a column
+        # literally named "error" (log/audit tables) must NOT be an error — only
+        # a *single*-element list is treated as the error sentinel.
+        rows = [{"error": "log text", "id": 1}, {"id": 2}]
+        assert tool_logging._classify_result(rows) == ("ok", None)
+
+    def test_empty_list_is_ok(self):
+        assert tool_logging._classify_result([]) == ("ok", None)
 
     def test_degraded_on_nonempty_errors(self):
         status, snip = tool_logging._classify_result(
@@ -262,6 +283,28 @@ class TestClassifyResult:
         from mcp.types import TextContent
 
         blocks = [TextContent(type="text", text=json.dumps({"found": True}))]
+        assert tool_logging._classify_result(blocks) == ("ok", None)
+
+    def test_converted_content_block_degraded(self):
+        # A composite's dict arrives as a single content block on the live path.
+        from mcp.types import TextContent
+
+        blocks = [
+            TextContent(type="text", text=json.dumps({"_errors": ["NetSuite: 400"]}))
+        ]
+        status, snip = tool_logging._classify_result(blocks)
+        assert status == "degraded"
+        assert "NetSuite: 400" in snip
+
+    def test_converted_multi_row_data_is_ok(self):
+        # Multiple content blocks == a multi-row data result, even if the first
+        # row carries an "error" column — the live-path twin of the raw regression.
+        from mcp.types import TextContent
+
+        blocks = [
+            TextContent(type="text", text=json.dumps({"error": "log text", "id": 1})),
+            TextContent(type="text", text=json.dumps({"id": 2})),
+        ]
         assert tool_logging._classify_result(blocks) == ("ok", None)
 
     def test_converted_structured_tuple(self):
@@ -340,6 +383,39 @@ class TestInstrumentStatus:
         assert record["status"] == "ok"
         assert "error" not in record
 
+    def test_multi_row_data_with_error_column_stays_ok(self, usage_path, caplog):
+        # End-to-end via the live convert_result=True path: a multi-row result
+        # whose first row has an "error" column must not flip to status=error.
+        mcp = _build_mcp()
+        instrument(mcp)
+        with caplog.at_level("INFO", logger="agent_b.usage"):
+            asyncio.run(mcp.call_tool("data_rows", {}))
+        assert "status=ok" in caplog.text
+        record = json.loads(usage_path.read_text().strip())
+        assert record["status"] == "ok"
+        assert "error" not in record
+
+    def test_raised_exception_snippet_masks_email(self, usage_path, caplog):
+        # The raised-exception path must mask PII in its snippet too, in both the
+        # stdout line and the JSONL "error" field.
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        with caplog.at_level("INFO", logger="agent_b.usage"):
+            with pytest.raises(ToolError):
+                asyncio.run(
+                    mcp._tool_manager.call_tool(
+                        "raises_with_email", {"email": "jane@vines.com"}
+                    )
+                )
+        assert "jane@vines.com" not in caplog.text
+        assert "j***@vines.com" in caplog.text
+        record = json.loads(usage_path.read_text().strip())
+        assert record["status"] == "error"
+        assert "jane@vines.com" not in record["error"]
+        assert "j***@vines.com" in record["error"]
+
 
 @pytest.fixture
 def restore_log_levels():
@@ -348,7 +424,7 @@ def restore_log_levels():
         "",
         "agent_b.usage",
         "some.random.logger",
-        *tool_logging._NOISY_LOGGER_DEFAULTS,
+        *tool_logging._LOGGER_LEVEL_DEFAULTS,
     ]
     saved = {n: logging.getLogger(n).level for n in names}
     try:
@@ -359,16 +435,32 @@ def restore_log_levels():
 
 
 class TestConfigureLogging:
-    def test_noisy_loggers_default_to_warning(self, monkeypatch, restore_log_levels):
+    def test_per_logger_defaults_applied(self, monkeypatch, restore_log_levels):
         monkeypatch.delenv("LOG_LEVEL", raising=False)
         monkeypatch.delenv("LOG_LEVEL_OVERRIDES", raising=False)
-        for name in tool_logging._NOISY_LOGGER_DEFAULTS:
+        for name in tool_logging._LOGGER_LEVEL_DEFAULTS:
             logging.getLogger(name).setLevel(logging.NOTSET)
 
         tool_logging.configure_logging()
 
-        for name in tool_logging._NOISY_LOGGER_DEFAULTS:
+        for name, want in tool_logging._LOGGER_LEVEL_DEFAULTS.items():
+            assert logging.getLogger(name).level == getattr(logging, want)
+
+    def test_noisy_loggers_default_to_warning(self, monkeypatch, restore_log_levels):
+        monkeypatch.delenv("LOG_LEVEL", raising=False)
+        monkeypatch.delenv("LOG_LEVEL_OVERRIDES", raising=False)
+        tool_logging.configure_logging()
+        for name in ("uvicorn.access", "httpx", "httpcore", "mcp.server.lowlevel"):
             assert logging.getLogger(name).level == logging.WARNING
+
+    def test_uvicorn_error_stays_info_for_startup_banner(
+        self, monkeypatch, restore_log_levels
+    ):
+        # LOG_LEVEL=WARNING must not hide the "Uvicorn running on ..." banner.
+        monkeypatch.setenv("LOG_LEVEL", "WARNING")
+        monkeypatch.delenv("LOG_LEVEL_OVERRIDES", raising=False)
+        tool_logging.configure_logging()
+        assert logging.getLogger("uvicorn.error").level == logging.INFO
 
     def test_override_via_env(self, monkeypatch, restore_log_levels):
         monkeypatch.setenv("LOG_LEVEL_OVERRIDES", "uvicorn.access=INFO, httpx=DEBUG")
@@ -387,6 +479,31 @@ class TestConfigureLogging:
         monkeypatch.setenv("LOG_LEVEL_OVERRIDES", "garbage,,=INFO,httpx=DEBUG")
         tool_logging.configure_logging()  # must not raise
         assert logging.getLogger("httpx").level == logging.DEBUG
+
+    def test_invalid_log_level_does_not_crash(self, monkeypatch, restore_log_levels):
+        # BASIC_FORMAT is a real logging attribute but not a level — the old
+        # getattr guard let it through and setLevel raised at import.
+        monkeypatch.setenv("LOG_LEVEL", "BASIC_FORMAT")
+        monkeypatch.delenv("LOG_LEVEL_OVERRIDES", raising=False)
+        tool_logging.configure_logging()  # must not raise
+        assert logging.getLogger().level == logging.INFO  # fell back to default
+
+    def test_invalid_override_level_falls_back_to_default(
+        self, monkeypatch, restore_log_levels
+    ):
+        # A garbage level on a default logger falls back to that logger's default.
+        monkeypatch.setenv("LOG_LEVEL_OVERRIDES", "uvicorn.access=BASIC_FORMAT")
+        tool_logging.configure_logging()  # must not raise
+        assert logging.getLogger("uvicorn.access").level == logging.WARNING
+
+    def test_invalid_override_level_on_arbitrary_logger_is_skipped(
+        self, monkeypatch, restore_log_levels
+    ):
+        logging.getLogger("some.random.logger").setLevel(logging.NOTSET)
+        monkeypatch.setenv("LOG_LEVEL_OVERRIDES", "some.random.logger=NOPE")
+        tool_logging.configure_logging()  # must not raise
+        # Unresolvable level for a non-default logger → left untouched.
+        assert logging.getLogger("some.random.logger").level == logging.NOTSET
 
     def test_usage_logger_stays_info_regardless_of_root(
         self, monkeypatch, restore_log_levels

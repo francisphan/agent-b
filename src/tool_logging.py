@@ -115,9 +115,9 @@ def _mask_value(value: str) -> str:
     return f"{value[0]}***{value[-1]}"
 
 
-def _clip(text: str) -> str:
-    if len(text) > _MAX_VALUE:
-        return f"{text[:_MAX_VALUE]}… (+{len(text) - _MAX_VALUE} chars)"
+def _clip(text: str, limit: int = _MAX_VALUE) -> str:
+    if len(text) > limit:
+        return f"{text[:limit]}… (+{len(text) - limit} chars)"
     return text
 
 
@@ -179,10 +179,7 @@ _MAX_ERROR_SNIPPET = 300
 
 def _clip_error(text: str) -> str:
     """Mask emails, then clip an error message to a short, log-safe snippet."""
-    text = _EMAIL_RE.sub(_mask_email, text)
-    if len(text) > _MAX_ERROR_SNIPPET:
-        return f"{text[:_MAX_ERROR_SNIPPET]}… (+{len(text) - _MAX_ERROR_SNIPPET} chars)"
-    return text
+    return _clip(_EMAIL_RE.sub(_mask_email, text), _MAX_ERROR_SNIPPET)
 
 
 def _logical_payload(result: Any) -> Any:
@@ -194,12 +191,20 @@ def _logical_payload(result: Any) -> Any:
     * ``False`` (unit tests and other direct callers) → the raw Python return
       value: a ``dict`` or ``list``.
     * ``True`` (FastMCP's live ``call_tool``) → converted output: either a list
-      of content blocks — a single ``TextContent`` whose ``.text`` is the
-      JSON-dumped return value, for our un-annotated ``-> dict`` tools — or, if a
-      tool declares an output schema, an ``(unstructured, structured)`` tuple.
+      of content blocks — one ``TextContent`` per returned value, each carrying
+      the JSON-dumped value in ``.text`` — or, if a tool declares an output
+      schema, an ``(unstructured, structured)`` tuple.
 
-    Returns a dict/list suitable for classification, or ``None`` when nothing
-    can be recovered (in which case the call is treated as ok).
+    For the content-block case we decode every block back into its value so the
+    list's length is preserved: ``_classify_result`` relies on single-element
+    vs multi-element to tell an error sentinel (``[{"error": ...}]``) apart from
+    a multi-row data result. Non-content-block lists (raw return values) pass
+    through unchanged. Returns a dict/list for classification, or ``None`` when
+    nothing can be recovered (the call is then treated as ok).
+
+    We deliberately don't cap json.loads size here: the largest payloads are
+    degraded guest_360 profiles and call volume is ~84/week, so the parse cost
+    is negligible against the visibility win.
     """
     if isinstance(result, tuple) and len(result) == 2:
         structured = result[1]
@@ -212,27 +217,40 @@ def _logical_payload(result: Any) -> Any:
     if isinstance(result, dict):
         return result
     if isinstance(result, list):
-        first = result[0] if result else None
-        text = getattr(first, "text", None)
-        if isinstance(text, str) and getattr(first, "type", None) == "text":
-            try:
-                return json.loads(text)
-            except (ValueError, TypeError):
-                return None
-        return result
+        decoded = []
+        for item in result:
+            text = getattr(item, "text", None)
+            if isinstance(text, str) and getattr(item, "type", None) == "text":
+                try:
+                    decoded.append(json.loads(text))
+                except (ValueError, TypeError):
+                    decoded.append(item)
+            else:
+                decoded.append(item)
+        return decoded
     return None
 
 
 def _classify_result(result: Any) -> tuple[str, str | None]:
     """Map a tool return value to ``(status, error_snippet)``.
 
-    * dict with a truthy ``error`` (or a list whose first item is one) → ``error``
+    * dict with a truthy ``error`` → ``error``
+    * single-element list whose only item is such a dict → ``error`` (the
+      ns_tools/opera_tools ``[{"error": ...}]`` convention). A *multi*-element
+      list is a multi-row data result, never a status probe — so a data row
+      that happens to have a column named ``error`` can't trip a false positive.
     * dict with a non-empty ``_errors`` list → ``degraded`` (composite partial)
     * anything else → ``ok`` (snippet ``None``)
     """
     payload = _logical_payload(result)
+    # A dict-returning tool arrives wrapped in a one-element content-block list
+    # once convert_result has run; list tools use the same one-element shape for
+    # their error sentinel. Unwrap only that case — a longer list is data.
     if isinstance(payload, list):
-        payload = payload[0] if payload else None
+        if len(payload) == 1:
+            payload = payload[0]
+        else:
+            return "ok", None
     if isinstance(payload, dict):
         err = payload.get("error")
         if err:
@@ -285,24 +303,42 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             correlation_id.reset(token)
 
 
-# Third-party / framework loggers that emit a line per request or per HTTP
-# round-trip. Left at their default INFO they bury the agent_b.usage log. We
-# quiet them to WARNING by default; override any of them (or add others) via
-# LOG_LEVEL_OVERRIDES — a comma-separated list of ``logger=LEVEL`` pairs, e.g.
-#   LOG_LEVEL_OVERRIDES="uvicorn.access=INFO,httpx=DEBUG"
-_NOISY_LOGGER_DEFAULTS = {
+# Explicit default levels for specific loggers, applied after the root level.
+# Most are noisy framework loggers that emit a line per request / HTTP
+# round-trip and would bury the agent_b.usage log at their INFO default, so we
+# quiet them to WARNING. uvicorn.error is the exception: it carries the
+# "Uvicorn running on ..." startup banner that ops/scrapers watch for, so we
+# hold it at INFO even when LOG_LEVEL raises the root threshold. Every entry is
+# overridable via LOG_LEVEL_OVERRIDES — a comma-separated list of
+# ``logger=LEVEL`` pairs, e.g. LOG_LEVEL_OVERRIDES="uvicorn.access=INFO,httpx=DEBUG"
+_LOGGER_LEVEL_DEFAULTS = {
     "uvicorn.access": "WARNING",
+    "uvicorn.error": "INFO",
     "httpx": "WARNING",
     "httpcore": "WARNING",
     "mcp.server.lowlevel": "WARNING",
 }
 
 
+def _resolve_level(value: str) -> int | None:
+    """Resolve a level name to its int, or ``None`` if it isn't a real level.
+
+    ``getattr(logging, value)`` is unsafe: a value like ``BASIC_FORMAT`` is a
+    genuine ``logging`` attribute but not a level, so it slips past a getattr
+    default and makes ``setLevel`` raise — refusing server start. ``logging``'s
+    own name→level table is the authoritative check: ``getLevelName`` returns an
+    int for a known name and a ``"Level <x>"`` string otherwise.
+    """
+    resolved = logging.getLevelName(str(value).strip().upper())
+    return resolved if isinstance(resolved, int) else None
+
+
 def _parse_log_overrides(raw: str) -> dict[str, str]:
     """Parse ``LOG_LEVEL_OVERRIDES`` ("name=LEVEL,name=LEVEL") into a mapping.
 
     Malformed entries (no ``=``, empty name/level) are skipped rather than
-    raising — a bad env var must never stop the server from starting.
+    raising — a bad env var must never stop the server from starting. Level
+    validity is checked later, in :func:`_resolve_level`.
     """
     overrides: dict[str, str] = {}
     for item in raw.split(","):
@@ -320,16 +356,17 @@ def configure_logging() -> None:
     raise the level, so we don't double-emit. ``LOG_LEVEL`` overrides the
     default root level of INFO (set it to DEBUG for maximum verbosity).
 
-    Also quiets the noisy framework loggers in ``_NOISY_LOGGER_DEFAULTS`` to
-    WARNING so they don't drown the usage log, each overridable via
-    ``LOG_LEVEL_OVERRIDES``. ``agent_b.usage`` is pinned to INFO last so the
+    Also applies the per-logger defaults in ``_LOGGER_LEVEL_DEFAULTS`` (quieting
+    noisy framework loggers, keeping uvicorn's startup banner), each overridable
+    via ``LOG_LEVEL_OVERRIDES``. ``agent_b.usage`` is pinned to INFO last so the
     usage log stays audible even when ``LOG_LEVEL`` raises the root threshold.
+    Unrecognised level names (in ``LOG_LEVEL`` or an override) are ignored rather
+    than crashing the process — see :func:`_resolve_level`.
 
     Note: ``src/__main__.py`` starts uvicorn with ``log_config=None`` so
     uvicorn's own ``dictConfig`` can't reset ``uvicorn.access`` back to INFO
     after this runs.
     """
-    level = os.getenv("LOG_LEVEL", "INFO").upper()
     root = logging.getLogger()
     if not root.handlers:
         handler = logging.StreamHandler(sys.stdout)
@@ -340,16 +377,22 @@ def configure_logging() -> None:
             )
         )
         root.addHandler(handler)
-    root.setLevel(getattr(logging, level, logging.INFO))
+    root_level = _resolve_level(os.getenv("LOG_LEVEL", "INFO"))
+    root.setLevel(root_level if root_level is not None else logging.INFO)
 
     overrides = _parse_log_overrides(os.getenv("LOG_LEVEL_OVERRIDES", ""))
-    for name, default_level in _NOISY_LOGGER_DEFAULTS.items():
-        chosen = overrides.get(name, default_level)
-        logging.getLogger(name).setLevel(getattr(logging, chosen, logging.WARNING))
-    # Honour overrides for loggers outside the default set too.
-    for name, chosen in overrides.items():
-        if name not in _NOISY_LOGGER_DEFAULTS:
-            logging.getLogger(name).setLevel(getattr(logging, chosen, logging.INFO))
+    for name, default_level in _LOGGER_LEVEL_DEFAULTS.items():
+        chosen = _resolve_level(overrides.get(name, default_level))
+        if chosen is None:  # bad override → fall back to our own valid default
+            chosen = _resolve_level(default_level)
+        logging.getLogger(name).setLevel(chosen)
+    # Honour overrides for loggers outside the default set too; skip bad levels.
+    for name, value in overrides.items():
+        if name in _LOGGER_LEVEL_DEFAULTS:
+            continue
+        chosen = _resolve_level(value)
+        if chosen is not None:
+            logging.getLogger(name).setLevel(chosen)
     # The usage log is the point of this module; keep it audible regardless.
     logging.getLogger("agent_b.usage").setLevel(logging.INFO)
 
@@ -377,9 +420,12 @@ def instrument(mcp) -> None:
             result = await original_call_tool(name, arguments, *args, **kwargs)
         except Exception as exc:
             duration_ms = round((time.monotonic() - started) * 1000)
+            # Mask emails: an exception message like "no record for jane@x.com"
+            # would otherwise leak the exact PII _clip_error exists to prevent.
+            exc_snippet = _clip_error(str(exc))
             logger.info(
                 "tool=%s corr=%s auth=%s status=error dur=%dms error=%s: %s | args=%s",
-                name, corr, auth, duration_ms, type(exc).__name__, _clip(str(exc)),
+                name, corr, auth, duration_ms, type(exc).__name__, exc_snippet,
                 redacted_args,
             )
             _write_usage_record(
@@ -392,7 +438,7 @@ def instrument(mcp) -> None:
                     "status": "error",
                     "duration_ms": duration_ms,
                     "error_type": type(exc).__name__,
-                    "error": _clip(str(exc)),
+                    "error": exc_snippet,
                     "args": redacted_args,
                 }
             )
