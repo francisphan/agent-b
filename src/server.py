@@ -37,9 +37,7 @@ def _build_oauth_provider() -> Optional[GoogleOAuthProvider]:
     if not (client_id and client_secret and public_url and signing_key):
         return None
 
-    write_emails = {
-        e.strip() for e in os.getenv("OAUTH_WRITE_EMAILS", "").split(",") if e.strip()
-    }
+    write_emails = {e.strip() for e in os.getenv("OAUTH_WRITE_EMAILS", "").split(",") if e.strip()}
     extra_allowed = {
         e.strip() for e in os.getenv("OAUTH_EXTRA_ALLOWED_EMAILS", "").split(",") if e.strip()
     }
@@ -309,35 +307,39 @@ def opera_table_resource(table: str) -> str:
 @mcp.resource("guide://query-patterns")
 def query_patterns_resource() -> str:
     """Common query patterns and tips for Salesforce SOQL and NetSuite SuiteQL."""
-    return json.dumps({
-        "soql_tips": [
-            "Use sf_get_schema before writing SOQL to discover field names",
-            "TVRS_Guest__c.Contact__r.AccountId traverses Guest -> Contact -> Account",
-            "Person Accounts: query Account with IsPersonAccount = true, use PersonEmail",
-            "Aggregate queries: SELECT StageName, COUNT(Id) FROM Opportunity GROUP BY StageName",
-            "Date literals: TODAY, LAST_N_DAYS:30, THIS_YEAR, NEXT_WEEK",
-            "Subqueries: SELECT Id, (SELECT Id FROM Contacts) FROM Account",
-        ],
-        "suiteql_tips": [
-            "Use ns_get_netsuite_schema before writing SuiteQL to discover table/field names",
-            # Cross-table gotchas (LIMIT/FETCH FIRST, id, balancesearch, T/F, dates)
-            # come from the single source in ns_schema.GLOBAL_TIPS, like OPERA_TIPS below.
-            *NS_TIPS,
-            "Line items: JOIN transactionline tl ON t.id = tl.transaction",
-        ],
-        "cross_system": [
-            "Use lookup_guest_by_email for quick cross-system existence checks",
-            "Use guest_360_profile for a unified view with stay history + financials + marketing",
-            "Email is the primary cross-system key (SF Email__c, NS email, Pardot email)",
-            "guest_360_profile pulls OPERA stay history when an OPERA NAME match is found by email",
-        ],
-        "opera_sql_tips": OPERA_TIPS,
-    }, indent=2)
+    return json.dumps(
+        {
+            "soql_tips": [
+                "Use sf_get_schema before writing SOQL to discover field names",
+                "TVRS_Guest__c.Contact__r.AccountId traverses Guest -> Contact -> Account",
+                "Person Accounts: query Account with IsPersonAccount = true, use PersonEmail",
+                "Aggregate queries: SELECT StageName, COUNT(Id) FROM Opportunity GROUP BY StageName",
+                "Date literals: TODAY, LAST_N_DAYS:30, THIS_YEAR, NEXT_WEEK",
+                "Subqueries: SELECT Id, (SELECT Id FROM Contacts) FROM Account",
+            ],
+            "suiteql_tips": [
+                "Use ns_get_netsuite_schema before writing SuiteQL to discover table/field names",
+                # Cross-table gotchas (LIMIT/FETCH FIRST, id, balancesearch, T/F, dates)
+                # come from the single source in ns_schema.GLOBAL_TIPS, like OPERA_TIPS below.
+                *NS_TIPS,
+                "Line items: JOIN transactionline tl ON t.id = tl.transaction",
+            ],
+            "cross_system": [
+                "Use lookup_guest_by_email for quick cross-system existence checks",
+                "Use guest_360_profile for a unified view with stay history + financials + marketing",
+                "Email is the primary cross-system key (SF Email__c, NS email, Pardot email)",
+                "guest_360_profile pulls OPERA stay history when an OPERA NAME match is found by email",
+            ],
+            "opera_sql_tips": OPERA_TIPS,
+        },
+        indent=2,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Prompts — pre-built templates for common operations
 # ---------------------------------------------------------------------------
+
 
 @mcp.prompt()
 def guest_arrivals() -> str:

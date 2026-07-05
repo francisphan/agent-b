@@ -17,6 +17,7 @@ def mcp_with_tools():
         def wrapper(func):
             registered[func.__name__] = func
             return func
+
         return wrapper
 
     mcp.tool = tool_decorator
@@ -88,9 +89,7 @@ class TestNsUpsertRecord:
     @patch("src.ns_write_tools.require_write_access")
     def test_success(self, mock_auth, mock_upsert, mcp_with_tools):
         mock_upsert.return_value = {"id": "123", "created": True}
-        result = mcp_with_tools["ns_upsert_record"](
-            "customer", {"companyName": "Acme"}, "ext-001"
-        )
+        result = mcp_with_tools["ns_upsert_record"]("customer", {"companyName": "Acme"}, "ext-001")
         mock_auth.assert_called_once()
         mock_upsert.assert_called_once_with("customer", {"companyName": "Acme"}, "ext-001")
         assert result["created"] is True

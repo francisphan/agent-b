@@ -82,6 +82,7 @@ def _correlation_from_request() -> str | None:
     cid = headers.get("x-correlation-id")
     return cid[:_MAX_CORRELATION_ID] if cid else None
 
+
 # Per-string-value cap so a giant query or note can't bloat the logs.
 _MAX_VALUE = 500
 
@@ -89,11 +90,27 @@ _MAX_VALUE = 500
 # Kept deliberately specific so structural args (object_name, record_type,
 # field names) are NOT masked — we want those for usage analysis.
 _SENSITIVE_KEYS = {
-    "email", "e_mail", "mail", "personemail",
-    "phone", "mobile", "telephone", "fax",
-    "first_name", "firstname", "last_name", "lastname",
-    "full_name", "fullname", "given_name", "surname",
-    "address", "street", "postal_code", "zip", "ssn",
+    "email",
+    "e_mail",
+    "mail",
+    "personemail",
+    "phone",
+    "mobile",
+    "telephone",
+    "fax",
+    "first_name",
+    "firstname",
+    "last_name",
+    "lastname",
+    "full_name",
+    "fullname",
+    "given_name",
+    "surname",
+    "address",
+    "street",
+    "postal_code",
+    "zip",
+    "ssn",
 }
 
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -425,7 +442,12 @@ def instrument(mcp) -> None:
             exc_snippet = _clip_error(str(exc))
             logger.info(
                 "tool=%s corr=%s auth=%s status=error dur=%dms error=%s: %s | args=%s",
-                name, corr, auth, duration_ms, type(exc).__name__, exc_snippet,
+                name,
+                corr,
+                auth,
+                duration_ms,
+                type(exc).__name__,
+                exc_snippet,
                 redacted_args,
             )
             _write_usage_record(
@@ -453,12 +475,23 @@ def instrument(mcp) -> None:
         if status == "ok":
             logger.info(
                 "tool=%s corr=%s auth=%s status=ok dur=%dms result=%sB | args=%s",
-                name, corr, auth, duration_ms, size_str, redacted_args,
+                name,
+                corr,
+                auth,
+                duration_ms,
+                size_str,
+                redacted_args,
             )
         else:
             logger.info(
                 "tool=%s corr=%s auth=%s status=%s dur=%dms result=%sB error=%s | args=%s",
-                name, corr, auth, status, duration_ms, size_str, error_snippet,
+                name,
+                corr,
+                auth,
+                status,
+                duration_ms,
+                size_str,
+                error_snippet,
                 redacted_args,
             )
         record = {

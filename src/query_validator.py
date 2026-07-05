@@ -15,6 +15,7 @@ from src.ns_schema import SCHEMA as NS_SCHEMA
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _fuzzy_suggest(name: str, candidates: list[str], n: int = 3, cutoff: float = 0.5) -> list[str]:
     """Return close matches for name from candidates."""
     return get_close_matches(name, candidates, n=n, cutoff=cutoff)
@@ -49,8 +50,11 @@ def _extract_soql_parts(soql: str) -> dict:
                     result["fields"].append(field)
 
     # WHERE clause fields
-    where_match = re.search(r"\bWHERE\s+(.+?)(?:\bORDER\b|\bGROUP\b|\bLIMIT\b|\bOFFSET\b|$)",
-                            soql, re.IGNORECASE | re.DOTALL)
+    where_match = re.search(
+        r"\bWHERE\s+(.+?)(?:\bORDER\b|\bGROUP\b|\bLIMIT\b|\bOFFSET\b|$)",
+        soql,
+        re.IGNORECASE | re.DOTALL,
+    )
     if where_match:
         raw = where_match.group(1)
         # Find field-like tokens before operators
@@ -95,6 +99,7 @@ def _get_ns_field_names(record_type: str) -> list[str] | None:
 # ---------------------------------------------------------------------------
 # Public validation
 # ---------------------------------------------------------------------------
+
 
 def validate_soql(soql: str) -> dict:
     """Validate a SOQL query against the curated Salesforce schema.
@@ -234,14 +239,10 @@ def enhance_sf_error(error_message: str, soql: str) -> str:
             close = _fuzzy_suggest(bad_field, known, cutoff=0.4)
             if close:
                 suggestions.append(f"Did you mean: {', '.join(close)}?")
-            suggestions.append(
-                f"Use sf_get_schema(objects='{obj_name}') to see all known fields."
-            )
+            suggestions.append(f"Use sf_get_schema(objects='{obj_name}') to see all known fields.")
 
     # "sObject type 'X' is not supported"
-    obj_match = re.search(
-        r"sObject type '(\w+)' is not supported", error_message, re.IGNORECASE
-    )
+    obj_match = re.search(r"sObject type '(\w+)' is not supported", error_message, re.IGNORECASE)
     if obj_match:
         bad_obj = obj_match.group(1)
         close = _fuzzy_suggest(bad_obj, list(SF_SCHEMA.keys()), cutoff=0.4)
@@ -259,8 +260,9 @@ def enhance_ns_error(error_message: str, query: str) -> str:
     suggestions = []
 
     # "Invalid search column" or "field not found"
-    field_match = re.search(r"(?:Invalid (?:search )?column|field not found)[:\s]*(\w+)",
-                            error_message, re.IGNORECASE)
+    field_match = re.search(
+        r"(?:Invalid (?:search )?column|field not found)[:\s]*(\w+)", error_message, re.IGNORECASE
+    )
     if field_match:
         bad_field = field_match.group(1)
         tables = _extract_suiteql_tables(query)
@@ -269,13 +271,12 @@ def enhance_ns_error(error_message: str, query: str) -> str:
             if known:
                 close = _fuzzy_suggest(bad_field, known, cutoff=0.4)
                 if close:
-                    suggestions.append(
-                        f"On '{table}': did you mean {', '.join(close)}?"
-                    )
+                    suggestions.append(f"On '{table}': did you mean {', '.join(close)}?")
 
     # "Invalid table" or "table not found"
-    table_match = re.search(r"(?:Invalid table|table not found)[:\s]*(\w+)",
-                            error_message, re.IGNORECASE)
+    table_match = re.search(
+        r"(?:Invalid table|table not found)[:\s]*(\w+)", error_message, re.IGNORECASE
+    )
     if table_match:
         bad_table = table_match.group(1)
         all_tables = list(NS_SCHEMA.keys()) + ["transactionline"]

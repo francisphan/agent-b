@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 
-
 class TestCrossToolRegistration:
     """Test that cross-system tools register correctly."""
 
@@ -15,10 +14,12 @@ class TestCrossToolRegistration:
             def decorator(fn):
                 captured[fn.__name__] = fn
                 return fn
+
             return decorator
 
         mcp.tool = capture_tool
         from src.cross_tools import register_tools
+
         register_tools(mcp)
 
         assert "lookup_guest_by_email" in captured
@@ -35,6 +36,7 @@ class TestLookupGuest:
         mock_pardot.return_value = {"values": []}
 
         from src.cross_tools import lookup_guest
+
         result = lookup_guest("Test@Example.com")
 
         assert result["email"] == "test@example.com"
@@ -51,6 +53,7 @@ class TestLookupGuest:
         mock_pardot.return_value = {"values": []}
 
         from src.cross_tools import lookup_guest
+
         result = lookup_guest("test@example.com")
 
         assert "error" in result["salesforce"]
@@ -66,6 +69,7 @@ class TestLookupGuest:
         mock_pardot.return_value = {"values": []}
 
         from src.cross_tools import lookup_guest
+
         result = lookup_guest("test@example.com")
 
         assert result["salesforce"] is not None
@@ -101,20 +105,41 @@ class TestGuest360:
         ]
         mock_ns.side_effect = [
             # First call: customer
-            [{"id": 123, "entityid": "CUST-123", "email": "john@example.com",
-              "firstname": "John", "lastname": "Doe", "balance": 1500}],
+            [
+                {
+                    "id": 123,
+                    "entityid": "CUST-123",
+                    "email": "john@example.com",
+                    "firstname": "John",
+                    "lastname": "Doe",
+                    "balance": 1500,
+                }
+            ],
             # Second call: transactions
-            [{"id": 456, "tranid": "INV-001", "type": "CustInvc",
-              "trandate": "2025-05-01", "foreigntotal": 1500}],
+            [
+                {
+                    "id": 456,
+                    "tranid": "INV-001",
+                    "type": "CustInvc",
+                    "trandate": "2025-05-01",
+                    "foreigntotal": 1500,
+                }
+            ],
         ]
         mock_pardot.return_value = {
             "values": [
-                {"id": 789, "email": "john@example.com", "score": 85,
-                 "grade": "A", "lastActivityAt": "2025-05-15"},
+                {
+                    "id": 789,
+                    "email": "john@example.com",
+                    "score": 85,
+                    "grade": "A",
+                    "lastActivityAt": "2025-05-15",
+                },
             ]
         }
 
         from src.cross_tools import guest_360
+
         profile = guest_360("john@example.com")
 
         assert profile["identity"]["first_name"] == "John"
@@ -136,6 +161,7 @@ class TestGuest360:
         mock_pardot.return_value = {"values": []}
 
         from src.cross_tools import guest_360
+
         profile = guest_360("test@example.com")
 
         assert "_errors" in profile
@@ -158,6 +184,7 @@ class TestPardotDisabled:
         mock_ns.return_value = []
 
         from src.cross_tools import guest_360
+
         profile = guest_360("test@example.com")
 
         assert "_errors" in profile
@@ -174,6 +201,7 @@ class TestPardotDisabled:
         mock_ns.return_value = []
 
         from src.cross_tools import lookup_guest
+
         result = lookup_guest("test@example.com")
 
         assert "error" in result["pardot"]

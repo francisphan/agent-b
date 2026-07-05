@@ -20,10 +20,16 @@ SCHEMA: dict[str, dict] = {
             {"name": "FIRST", "type": "string"},
             {"name": "LAST", "type": "string"},
             {"name": "FULL_NAME", "type": "string"},
-            {"name": "NAME_TYPE", "type": "string",
-             "note": "'D' = guest, 'C' = company, 'G' = group, 'S' = source/agent"},
-            {"name": "LANGUAGE", "type": "string",
-             "note": "OPERA language code (E=English, S=Spanish, P=Portuguese, etc.)"},
+            {
+                "name": "NAME_TYPE",
+                "type": "string",
+                "note": "'D' = guest, 'C' = company, 'G' = group, 'S' = source/agent",
+            },
+            {
+                "name": "LANGUAGE",
+                "type": "string",
+                "note": "OPERA language code (E=English, S=Spanish, P=Portuguese, etc.)",
+            },
             {"name": "VIP_STATUS", "type": "string"},
             {"name": "BIRTH_DATE", "type": "date"},
             {"name": "NATIONALITY", "type": "string"},
@@ -45,10 +51,12 @@ SCHEMA: dict[str, dict] = {
         ),
         "key_fields": [
             {"name": "NAME_ID", "type": "number", "note": "FK → NAME.NAME_ID"},
-            {"name": "PHONE_ROLE", "type": "string",
-             "note": "'EMAIL', 'MOBILE', 'PHONE', 'FAX'"},
-            {"name": "PHONE_NUMBER", "type": "string",
-             "note": "Holds email address when PHONE_ROLE = 'EMAIL'"},
+            {"name": "PHONE_ROLE", "type": "string", "note": "'EMAIL', 'MOBILE', 'PHONE', 'FAX'"},
+            {
+                "name": "PHONE_NUMBER",
+                "type": "string",
+                "note": "Holds email address when PHONE_ROLE = 'EMAIL'",
+            },
             {"name": "PRIMARY_YN", "type": "string", "note": "'Y' for primary"},
             {"name": "INSERT_DATE", "type": "datetime"},
             {"name": "UPDATE_DATE", "type": "datetime"},
@@ -90,10 +98,16 @@ SCHEMA: dict[str, dict] = {
             {"name": "RESORT", "type": "string", "note": "Always 'VINES' here"},
             {"name": "BEGIN_DATE", "type": "date", "note": "Check-in"},
             {"name": "END_DATE", "type": "date", "note": "Check-out"},
-            {"name": "RESV_STATUS", "type": "string",
-             "note": "'RESERVED', 'CHECKED IN', 'CHECKED OUT', 'CANCELLED', 'NO SHOW'"},
-            {"name": "PARENT_RESV_NAME_ID", "type": "number",
-             "note": "Companion's parent reservation (NULL for primary)"},
+            {
+                "name": "RESV_STATUS",
+                "type": "string",
+                "note": "'RESERVED', 'CHECKED IN', 'CHECKED OUT', 'CANCELLED', 'NO SHOW'",
+            },
+            {
+                "name": "PARENT_RESV_NAME_ID",
+                "type": "number",
+                "note": "Companion's parent reservation (NULL for primary)",
+            },
             {"name": "ARRIVAL_ESTIMATE_TIME", "type": "datetime", "note": "ETA"},
             {"name": "RATE_CODE", "type": "string"},
             {"name": "MARKET_CODE", "type": "string"},
@@ -125,8 +139,11 @@ SCHEMA: dict[str, dict] = {
             {"name": "RESV_NAME_ID", "type": "number", "note": "FK → RESERVATION_NAME"},
             {"name": "RESORT", "type": "string"},
             {"name": "RESERVATION_DATE", "type": "date", "note": "The specific night"},
-            {"name": "RESV_DAILY_EL_SEQ", "type": "number",
-             "note": "Composite key with RESORT+RESERVATION_DATE to RESERVATION_DAILY_ELEMENTS"},
+            {
+                "name": "RESV_DAILY_EL_SEQ",
+                "type": "number",
+                "note": "Composite key with RESORT+RESERVATION_DATE to RESERVATION_DAILY_ELEMENTS",
+            },
             {"name": "ADULTS", "type": "number"},
             {"name": "CHILDREN", "type": "number"},
         ],
@@ -161,18 +178,21 @@ SCHEMA: dict[str, dict] = {
         "description": (
             "Long-form profile notes — allergies (PREF), incidents (INCONV), "
             "biographical (GUESTPROF), etc. NOTES column is a CLOB. Table name "
-            "contains a $ so must be double-quoted: OPERA.\"NAME$NOTES\"."
+            'contains a $ so must be double-quoted: OPERA."NAME$NOTES".'
         ),
         "key_fields": [
             {"name": "NAME_ID", "type": "number"},
-            {"name": "NOTE_CODE", "type": "string",
-             "note": "Common codes: PREF, INCONV, GUESTPROF"},
+            {
+                "name": "NOTE_CODE",
+                "type": "string",
+                "note": "Common codes: PREF, INCONV, GUESTPROF",
+            },
             {"name": "NOTES", "type": "clob"},
             {"name": "INACTIVE_DATE", "type": "date"},
             {"name": "INSERT_DATE", "type": "datetime"},
         ],
         "example_sql": [
-            "SELECT NAME_ID, NOTE_CODE, NOTES FROM OPERA.\"NAME$NOTES\" "
+            'SELECT NAME_ID, NOTE_CODE, NOTES FROM OPERA."NAME$NOTES" '
             "WHERE NAME_ID = :name_id AND INACTIVE_DATE IS NULL "
             "ORDER BY INSERT_DATE",
         ],
@@ -212,7 +232,7 @@ GLOBAL_TIPS: list[str] = [
     "Room number lives in RESERVATION_DAILY_ELEMENTS.ROOM — join via RESERVATION_DAILY_ELEMENT_NAME on (RESORT, RESERVATION_DATE, RESV_DAILY_EL_SEQ).",
     "Cancelled rows: RESV_STATUS = 'CANCELLED' — exclude unless you specifically want them.",
     "Companions share PARENT_RESV_NAME_ID with the primary booker.",
-    "NAME$NOTES is double-quoted because the table name contains a $: OPERA.\"NAME$NOTES\".",
+    'NAME$NOTES is double-quoted because the table name contains a $: OPERA."NAME$NOTES".',
     "Date binds: TO_DATE(:date_str, 'YYYY-MM-DD'). TRUNC() to compare to a date literal.",
     "Posting Master rooms (room prefix 'PM' or villa numbers 9000–9999) are charge-tracking accounts, not real stays.",
 ]

@@ -140,9 +140,7 @@ def analyze(
             corr = r.get("correlation_id")
             calls = calls_by_corr.get(corr or "")
             if calls:
-                example_args = [
-                    {"tool": c.get("tool"), "args": c.get("args")} for c in calls
-                ]
+                example_args = [{"tool": c.get("tool"), "args": c.get("args")} for c in calls]
                 example_total_ms = sum(
                     float(c["duration_ms"])
                     for c in calls
@@ -211,8 +209,7 @@ def render_text(stats: dict[str, Any]) -> str:
         f"{m['multi_tool']} multi-tool ({m['multi_tool_share'] * 100:.0f}%)"
     )
     lines.append(
-        f"Chain length: avg {cl['avg']}, p50 {cl['p50']}, "
-        f"p95 {cl['p95']}, max {cl['max']}"
+        f"Chain length: avg {cl['avg']}, p50 {cl['p50']}, p95 {cl['p95']}, max {cl['max']}"
     )
     if not m["requests_captured"]:
         lines.append(
@@ -239,10 +236,7 @@ def render_text(stats: dict[str, Any]) -> str:
             if c["example_total_tool_ms"] is not None
             else ""
         )
-        lines.append(
-            f"\n{i}. [{c['count']}x, {share:.0f}%] "
-            f"{' → '.join(c['chain'])}{timing}"
-        )
+        lines.append(f"\n{i}. [{c['count']}x, {share:.0f}%] {' → '.join(c['chain'])}{timing}")
         for q in c["sample_requests"]:
             lines.append(f'     "{q}"')
         for ex in c["example_args"]:

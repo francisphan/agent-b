@@ -136,9 +136,7 @@ class TestJwtRoundTrip:
 class TestDomainRestriction:
     def test_allows_matching_hd_claim(self):
         provider = make_provider()
-        assert provider.is_email_allowed(
-            "alice@vinesofmendoza.com", "vinesofmendoza.com"
-        )
+        assert provider.is_email_allowed("alice@vinesofmendoza.com", "vinesofmendoza.com")
 
     def test_allows_matching_email_suffix_without_hd(self):
         provider = make_provider()
@@ -149,9 +147,7 @@ class TestDomainRestriction:
     def test_rejects_outside_domain(self):
         provider = make_provider()
         assert not provider.is_email_allowed("stranger@gmail.com", None)
-        assert not provider.is_email_allowed(
-            "stranger@gmail.com", "gmail.com"
-        )
+        assert not provider.is_email_allowed("stranger@gmail.com", "gmail.com")
 
     def test_no_restriction_when_domain_unset(self):
         provider = make_provider(allowed_domain=None)
@@ -211,9 +207,7 @@ class TestAuthorizeRedirect:
         # One pending record should be stashed for the callback to consume
         from src.oauth_provider import _PENDING_PREFIX
 
-        pending_keys = [
-            k for k in provider._store._data if k.startswith(_PENDING_PREFIX)
-        ]
+        pending_keys = [k for k in provider._store._data if k.startswith(_PENDING_PREFIX)]
         assert len(pending_keys) == 1
 
     async def test_authorize_omits_hd_when_extras_present(self):

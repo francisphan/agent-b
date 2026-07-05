@@ -12,9 +12,7 @@ from src.tool_logging import instrument, redact
 
 class TestRedact:
     def test_masks_email_value(self):
-        assert redact({"email": "jane.doe@example.com"}) == {
-            "email": "j***@example.com"
-        }
+        assert redact({"email": "jane.doe@example.com"}) == {"email": "j***@example.com"}
 
     def test_masks_email_inside_query_string_but_keeps_structure(self):
         out = redact({"query_str": "SELECT Id FROM Contact WHERE Email='bob@vines.com'"})
@@ -88,9 +86,7 @@ def _build_mcp():
 
 
 class TestInstrument:
-    def test_success_logs_and_writes_record_with_redacted_args(
-        self, usage_path, caplog
-    ):
+    def test_success_logs_and_writes_record_with_redacted_args(self, usage_path, caplog):
         mcp = _build_mcp()
         instrument(mcp)
 
@@ -124,9 +120,7 @@ class TestInstrument:
             # FastMCP wraps tool exceptions in ToolError; the original message
             # ("kaboom") is preserved. The wrapper must re-raise it unchanged.
             with pytest.raises(ToolError, match="kaboom"):
-                asyncio.run(
-                    mcp._tool_manager.call_tool("lookup", {"email": "boom"})
-                )
+                asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "boom"}))
 
         assert "status=error" in caplog.text
         record = json.loads(usage_path.read_text().strip())
@@ -148,9 +142,7 @@ class TestInstrument:
         token = tool_logging.correlation_id.set("turn-abc123")
         try:
             with caplog.at_level("INFO", logger="agent_b.usage"):
-                asyncio.run(
-                    mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"})
-                )
+                asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
         finally:
             tool_logging.correlation_id.reset(token)
 
@@ -178,9 +170,7 @@ class TestInstrument:
         mcp = _build_mcp()
         instrument(mcp)
 
-        token = request_ctx.set(
-            RequestContext("r1", None, None, None, request=_Req())
-        )
+        token = request_ctx.set(RequestContext("r1", None, None, None, request=_Req()))
         try:
             with caplog.at_level("INFO", logger="agent_b.usage"):
                 asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
@@ -203,9 +193,7 @@ class TestInstrument:
         instrument(mcp)
 
         cv_token = tool_logging.correlation_id.set("turn-STALE")
-        rc_token = request_ctx.set(
-            RequestContext("r1", None, None, None, request=_Req())
-        )
+        rc_token = request_ctx.set(RequestContext("r1", None, None, None, request=_Req()))
         try:
             with caplog.at_level("INFO", logger="agent_b.usage"):
                 asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
@@ -264,9 +252,7 @@ class TestClassifyResult:
         assert tool_logging._classify_result({"_errors": []}) == ("ok", None)
 
     def test_error_wins_over_errors(self):
-        status, _ = tool_logging._classify_result(
-            {"error": "hard fail", "_errors": ["leg"]}
-        )
+        status, _ = tool_logging._classify_result({"error": "hard fail", "_errors": ["leg"]})
         assert status == "error"
 
     def test_converted_content_block_error(self):
@@ -289,9 +275,7 @@ class TestClassifyResult:
         # A composite's dict arrives as a single content block on the live path.
         from mcp.types import TextContent
 
-        blocks = [
-            TextContent(type="text", text=json.dumps({"_errors": ["NetSuite: 400"]}))
-        ]
+        blocks = [TextContent(type="text", text=json.dumps({"_errors": ["NetSuite: 400"]}))]
         status, snip = tool_logging._classify_result(blocks)
         assert status == "degraded"
         assert "NetSuite: 400" in snip
@@ -313,10 +297,7 @@ class TestClassifyResult:
 
     def test_converted_wrap_output_tuple(self):
         # wrap_output nests the real value under "result".
-        assert (
-            tool_logging._classify_result(([], {"result": {"error": "boom"}}))[0]
-            == "error"
-        )
+        assert tool_logging._classify_result(([], {"result": {"error": "boom"}}))[0] == "error"
 
     def test_error_snippet_masks_email(self):
         status, snip = tool_logging._classify_result(
@@ -405,9 +386,7 @@ class TestInstrumentStatus:
         with caplog.at_level("INFO", logger="agent_b.usage"):
             with pytest.raises(ToolError):
                 asyncio.run(
-                    mcp._tool_manager.call_tool(
-                        "raises_with_email", {"email": "jane@vines.com"}
-                    )
+                    mcp._tool_manager.call_tool("raises_with_email", {"email": "jane@vines.com"})
                 )
         assert "jane@vines.com" not in caplog.text
         assert "j***@vines.com" in caplog.text
@@ -453,9 +432,7 @@ class TestConfigureLogging:
         for name in ("uvicorn.access", "httpx", "httpcore", "mcp.server.lowlevel"):
             assert logging.getLogger(name).level == logging.WARNING
 
-    def test_uvicorn_error_stays_info_for_startup_banner(
-        self, monkeypatch, restore_log_levels
-    ):
+    def test_uvicorn_error_stays_info_for_startup_banner(self, monkeypatch, restore_log_levels):
         # LOG_LEVEL=WARNING must not hide the "Uvicorn running on ..." banner.
         monkeypatch.setenv("LOG_LEVEL", "WARNING")
         monkeypatch.delenv("LOG_LEVEL_OVERRIDES", raising=False)
@@ -488,9 +465,7 @@ class TestConfigureLogging:
         tool_logging.configure_logging()  # must not raise
         assert logging.getLogger().level == logging.INFO  # fell back to default
 
-    def test_invalid_override_level_falls_back_to_default(
-        self, monkeypatch, restore_log_levels
-    ):
+    def test_invalid_override_level_falls_back_to_default(self, monkeypatch, restore_log_levels):
         # A garbage level on a default logger falls back to that logger's default.
         monkeypatch.setenv("LOG_LEVEL_OVERRIDES", "uvicorn.access=BASIC_FORMAT")
         tool_logging.configure_logging()  # must not raise
@@ -505,9 +480,7 @@ class TestConfigureLogging:
         # Unresolvable level for a non-default logger → left untouched.
         assert logging.getLogger("some.random.logger").level == logging.NOTSET
 
-    def test_usage_logger_stays_info_regardless_of_root(
-        self, monkeypatch, restore_log_levels
-    ):
+    def test_usage_logger_stays_info_regardless_of_root(self, monkeypatch, restore_log_levels):
         monkeypatch.setenv("LOG_LEVEL", "ERROR")
         monkeypatch.delenv("LOG_LEVEL_OVERRIDES", raising=False)
         tool_logging.configure_logging()
@@ -578,6 +551,8 @@ class TestCorrelationIdMiddleware:
         app.add_middleware(CorrelationIdMiddleware)
         client = TestClient(app)
 
-        assert client.get("/echo", headers={"X-Correlation-ID": "turn-1"}).json()["corr"] == "turn-1"
+        assert (
+            client.get("/echo", headers={"X-Correlation-ID": "turn-1"}).json()["corr"] == "turn-1"
+        )
         # Next request carries no header — must be None, not "turn-1".
         assert client.get("/echo").json()["corr"] is None

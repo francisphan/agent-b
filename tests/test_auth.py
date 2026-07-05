@@ -87,9 +87,7 @@ class TestBearerAuthMiddleware:
         assert captured["level"] == "read"
 
     def test_bad_token_is_unauthorized(self, monkeypatch):
-        result, sentinel, _ = self._dispatch(
-            monkeypatch, write="w-secret", header="Bearer wrong"
-        )
+        result, sentinel, _ = self._dispatch(monkeypatch, write="w-secret", header="Bearer wrong")
         assert result is not sentinel
         assert isinstance(result, JSONResponse)
         assert result.status_code == 401

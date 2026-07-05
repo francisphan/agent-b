@@ -17,6 +17,7 @@ def mcp_with_tools():
         def wrapper(func):
             registered[func.__name__] = func
             return func
+
         return wrapper
 
     mcp.tool = tool_decorator
@@ -125,16 +126,12 @@ class TestSfUpsertRecord:
     @patch("src.sf_write_tools.require_write_access")
     def test_permission_denied(self, mock_auth, mcp_with_tools):
         mock_auth.side_effect = PermissionError("Write access denied")
-        result = mcp_with_tools["sf_upsert_record"](
-            "TVRS_Guest__c", "Email__c", "x@y.com", {}
-        )
+        result = mcp_with_tools["sf_upsert_record"]("TVRS_Guest__c", "Email__c", "x@y.com", {})
         assert result == {"error": "Write access denied"}
 
     @patch("src.sf_write_tools.upsert_record")
     @patch("src.sf_write_tools.require_write_access")
     def test_api_error(self, mock_auth, mock_upsert, mcp_with_tools):
         mock_upsert.side_effect = Exception("DUPLICATE_VALUE")
-        result = mcp_with_tools["sf_upsert_record"](
-            "Account", "ExtId__c", "123", {"Name": "A"}
-        )
+        result = mcp_with_tools["sf_upsert_record"]("Account", "ExtId__c", "123", {"Name": "A"})
         assert result == {"error": "DUPLICATE_VALUE"}

@@ -998,9 +998,7 @@ def register_tools(mcp):
             return {"error": str(e)}
 
     @mcp.tool()
-    def pardot_connect_campaign_to_sf(
-        campaign_id: str, salesforce_campaign_id: str
-    ) -> dict:
+    def pardot_connect_campaign_to_sf(campaign_id: str, salesforce_campaign_id: str) -> dict:
         """Connect a Pardot campaign to a Salesforce campaign.
 
         Args:

@@ -88,8 +88,6 @@ class NetSuiteErrorResponse(BaseModel):
     title: str = ""
     status: int = 0
     error_code: str = Field(alias="o:errorCode", default="")
-    error_details: list[NetSuiteErrorDetail] = Field(
-        alias="o:errorDetails", default_factory=list
-    )
+    error_details: list[NetSuiteErrorDetail] = Field(alias="o:errorDetails", default_factory=list)
 
     model_config = {"populate_by_name": True}

@@ -80,9 +80,7 @@ def _load_cached_token() -> Salesforce | None:
         return None
     try:
         data = json.loads(TOKEN_CACHE.read_text())
-        sf = Salesforce(
-            instance_url=data["instance_url"], session_id=data["access_token"]
-        )
+        sf = Salesforce(instance_url=data["instance_url"], session_id=data["access_token"])
         sf.describe()  # test if token is still valid
         return sf
     except Exception:
@@ -122,9 +120,7 @@ def _refresh_oauth_token() -> Salesforce | None:
 
     data = resp.json()
     _save_token(data["instance_url"], data["access_token"], data.get("refresh_token"))
-    return Salesforce(
-        instance_url=data["instance_url"], session_id=data["access_token"]
-    )
+    return Salesforce(instance_url=data["instance_url"], session_id=data["access_token"])
 
 
 def _refresh_from_env() -> Salesforce | None:
@@ -154,9 +150,7 @@ def _refresh_from_env() -> Salesforce | None:
 
     data = resp.json()
     _save_token(data["instance_url"], data["access_token"], refresh_token)
-    return Salesforce(
-        instance_url=data["instance_url"], session_id=data["access_token"]
-    )
+    return Salesforce(instance_url=data["instance_url"], session_id=data["access_token"])
 
 
 def _reconnect() -> Salesforce:
@@ -358,18 +352,14 @@ def delete_record(object_name: str, record_id: str) -> dict:
     return _with_retry(_do, idempotent=False)
 
 
-def upsert_record(
-    object_name: str, external_id_field: str, external_id: str, data: dict
-) -> dict:
+def upsert_record(object_name: str, external_id_field: str, external_id: str, data: dict) -> dict:
     """Upsert a Salesforce record using an external ID field with retry."""
     validate_object_name(object_name)
     validate_object_name(external_id_field)
     validate_path_segment(external_id)
 
     def _do(sf):
-        return getattr(sf, object_name).upsert(
-            f"{external_id_field}/{external_id}", data
-        )
+        return getattr(sf, object_name).upsert(f"{external_id_field}/{external_id}", data)
 
     return _with_retry(_do)
 

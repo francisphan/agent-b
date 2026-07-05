@@ -28,6 +28,7 @@ def _log(msg: str) -> None:
     """Plain print so Railway captures it without logging config."""
     print(f"[oauth] {msg}", file=sys.stderr, flush=True)
 
+
 _JWKS_CLIENT: jwt.PyJWKClient | None = None
 
 
@@ -38,7 +39,9 @@ def _jwks_client() -> jwt.PyJWKClient:
     return _JWKS_CLIENT
 
 
-def _error_redirect(redirect_uri: str, client_state: str | None, error: str, description: str) -> RedirectResponse:
+def _error_redirect(
+    redirect_uri: str, client_state: str | None, error: str, description: str
+) -> RedirectResponse:
     _log(f"REJECT error={error} description={description}")
     params = {"error": error, "error_description": description}
     if client_state:
@@ -66,9 +69,16 @@ def make_oauth_callback_route(provider: GoogleOAuthProvider):
         client_state = pending.get("client_state")
 
         if error:
-            return _error_redirect(client_redirect_uri, client_state, error, request.query_params.get("error_description", ""))
+            return _error_redirect(
+                client_redirect_uri,
+                client_state,
+                error,
+                request.query_params.get("error_description", ""),
+            )
         if not code:
-            return _error_redirect(client_redirect_uri, client_state, "invalid_request", "Missing code")
+            return _error_redirect(
+                client_redirect_uri, client_state, "invalid_request", "Missing code"
+            )
 
         # Exchange Google code for tokens
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -85,7 +95,10 @@ def make_oauth_callback_route(provider: GoogleOAuthProvider):
                 )
             except httpx.HTTPError as exc:
                 return _error_redirect(
-                    client_redirect_uri, client_state, "server_error", f"Google token exchange failed: {exc}"
+                    client_redirect_uri,
+                    client_state,
+                    "server_error",
+                    f"Google token exchange failed: {exc}",
                 )
 
         if resp.status_code != 200:
@@ -100,7 +113,10 @@ def make_oauth_callback_route(provider: GoogleOAuthProvider):
         id_token = google_tokens.get("id_token")
         if not id_token:
             return _error_redirect(
-                client_redirect_uri, client_state, "server_error", "Google response missing id_token"
+                client_redirect_uri,
+                client_state,
+                "server_error",
+                "Google response missing id_token",
             )
 
         # Verify ID token signature against Google JWKS
@@ -116,7 +132,10 @@ def make_oauth_callback_route(provider: GoogleOAuthProvider):
             )
         except jwt.PyJWTError as exc:
             return _error_redirect(
-                client_redirect_uri, client_state, "server_error", f"Invalid Google ID token: {exc}"
+                client_redirect_uri,
+                client_state,
+                "server_error",
+                f"Invalid Google ID token: {exc}",
             )
 
         if not id_claims.get("email_verified"):
@@ -153,6 +172,8 @@ def make_oauth_callback_route(provider: GoogleOAuthProvider):
         if client_state:
             params["state"] = client_state
         separator = "&" if "?" in client_redirect_uri else "?"
-        return RedirectResponse(f"{client_redirect_uri}{separator}{urlencode(params)}", status_code=302)
+        return RedirectResponse(
+            f"{client_redirect_uri}{separator}{urlencode(params)}", status_code=302
+        )
 
     return oauth_callback

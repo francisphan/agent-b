@@ -18,9 +18,7 @@ class SuiteQLApi:
         self._client = client
         self._path = "/services/rest/query/v1/suiteql"
 
-    def query(
-        self, sql: str, *, limit: int = 1000, offset: int = 0
-    ) -> PaginatedResponse:
+    def query(self, sql: str, *, limit: int = 1000, offset: int = 0) -> PaginatedResponse:
         raw = self._client._request_sync(
             "POST",
             self._path,

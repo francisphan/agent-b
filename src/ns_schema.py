@@ -53,22 +53,43 @@ SCHEMA: dict[str, dict] = {
             {"name": "dateCreated", "type": "datetime"},
             {"name": "lastModifiedDate", "type": "datetime"},
             {"name": "externalId", "type": "string", "note": "External ID for integrations"},
-            {"name": "balance", "type": "currency",
-             "note": "Outstanding balance. REST field only — in SuiteQL the column "
-                     "is 'balancesearch' (use 'balancesearch AS balance'); a bare "
-                     "'balance' identifier is a 400. Overdue portion: "
-                     "'overduebalancesearch'."},
-            {"name": "thirdpartycountry", "type": "string",
-             "note": "Country code (e.g. 'US') — the ONLY geo field on customer. "
-                     "No state/region is available here; see geo_filtering_note."},
-            {"name": "custentity_vom_ownercode", "type": "string",
-             "note": "Vineyard owner code (e.g. 'BOYH'); non-null marks a wine/vineyard owner."},
+            {
+                "name": "balance",
+                "type": "currency",
+                "note": "Outstanding balance. REST field only — in SuiteQL the column "
+                "is 'balancesearch' (use 'balancesearch AS balance'); a bare "
+                "'balance' identifier is a 400. Overdue portion: "
+                "'overduebalancesearch'.",
+            },
+            {
+                "name": "thirdpartycountry",
+                "type": "string",
+                "note": "Country code (e.g. 'US') — the ONLY geo field on customer. "
+                "No state/region is available here; see geo_filtering_note.",
+            },
+            {
+                "name": "custentity_vom_ownercode",
+                "type": "string",
+                "note": "Vineyard owner code (e.g. 'BOYH'); non-null marks a wine/vineyard owner.",
+            },
         ],
         "suiteql_table": "customer",
         "suiteql_fields": [
-            "id", "entityid", "companyname", "firstname", "lastname", "email",
-            "phone", "isperson", "datecreated", "lastmodifieddate", "externalid",
-            "balancesearch", "overduebalancesearch", "subsidiary", "salesrep",
+            "id",
+            "entityid",
+            "companyname",
+            "firstname",
+            "lastname",
+            "email",
+            "phone",
+            "isperson",
+            "datecreated",
+            "lastmodifieddate",
+            "externalid",
+            "balancesearch",
+            "overduebalancesearch",
+            "subsidiary",
+            "salesrep",
             "thirdpartycountry",
             "custentity_vom_ownercode",
         ],
@@ -190,10 +211,18 @@ SCHEMA: dict[str, dict] = {
             {"name": "itemId", "type": "string", "note": "Display name / SKU"},
             {"name": "displayName", "type": "string"},
             {"name": "description", "type": "string"},
-            {"name": "type", "type": "string", "note": "Item type (Inventory, NonInventory, Service, etc.)"},
+            {
+                "name": "type",
+                "type": "string",
+                "note": "Item type (Inventory, NonInventory, Service, etc.)",
+            },
             {"name": "basePrice", "type": "currency"},
             {"name": "cost", "type": "currency"},
-            {"name": "quantityAvailable", "type": "number", "note": "Stock on hand (inventory items)"},
+            {
+                "name": "quantityAvailable",
+                "type": "number",
+                "note": "Stock on hand (inventory items)",
+            },
             {"name": "quantityOnOrder", "type": "number"},
             {"name": "isInactive", "type": "boolean"},
             {"name": "parent", "type": "reference", "note": "Parent item (for matrix items)"},
@@ -225,7 +254,11 @@ SCHEMA: dict[str, dict] = {
         "key_fields": [
             {"name": "id", "type": "integer"},
             {"name": "tranId", "type": "string", "note": "Document number"},
-            {"name": "type", "type": "string", "note": "SalesOrd, CustInvc, CustPymt, VendBill, etc."},
+            {
+                "name": "type",
+                "type": "string",
+                "note": "SalesOrd, CustInvc, CustPymt, VendBill, etc.",
+            },
             {"name": "entity", "type": "reference", "note": "Customer/Vendor"},
             {"name": "tranDate", "type": "date"},
             {"name": "status", "type": "string"},
@@ -358,8 +391,7 @@ GLOBAL_TIPS: list[str] = [
     "The row id column is 'id', NOT 'internalid' — a bare 'internalid' 400s.",
     "Customer balance is 'balancesearch' (overdue portion 'overduebalancesearch'), "
     "NOT 'balance'. Alias it as 'balancesearch AS balance'.",
-    "The customer table has no 'name' column — use entityid / companyname / "
-    "firstname / lastname.",
+    "The customer table has no 'name' column — use entityid / companyname / firstname / lastname.",
     "All transaction types share the 'transaction' table — filter by the 'type' "
     "column (SalesOrd, CustInvc, CustPymt, VendBill, PurchOrd, Journal).",
     "Booleans compare against 'T'/'F' strings, not true/false.",
@@ -372,10 +404,7 @@ GLOBAL_TIPS: list[str] = [
 RECORD_TYPE_NAMES = sorted(SCHEMA.keys())
 
 # SuiteQL table-to-record-type mapping for validation
-SUITEQL_TABLES = {
-    entry.get("suiteql_table", name): name
-    for name, entry in SCHEMA.items()
-}
+SUITEQL_TABLES = {entry.get("suiteql_table", name): name for name, entry in SCHEMA.items()}
 # Also add transactionline as a known table
 SUITEQL_TABLES["transactionline"] = "transactionline"
 
