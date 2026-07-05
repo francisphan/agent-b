@@ -43,4 +43,8 @@ uvicorn.run(
     app,
     host=os.getenv("MCP_HOST", "0.0.0.0"),
     port=int(os.getenv("MCP_PORT", "8000")),
+    # Don't let uvicorn's own dictConfig re-raise uvicorn.access to INFO and
+    # overwrite the levels configure_logging() set. Our root stdout handler
+    # already formats and emits every logger (see src/tool_logging.py).
+    log_config=None,
 )
