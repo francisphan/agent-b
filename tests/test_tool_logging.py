@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 
 import pytest
 
@@ -57,6 +58,21 @@ def _build_mcp():
         if email == "boom":
             raise ValueError("kaboom")
         return {"found": True, "email": email}
+
+    @mcp.tool()
+    def inband_error(email: str = "") -> dict:
+        # Tools return handled failures in-band rather than raising.
+        return {"error": "boom in band"}
+
+    @mcp.tool()
+    def list_error() -> list:
+        # List-returning tools wrap the failure in a one-element list.
+        return [{"error": "list boom"}]
+
+    @mcp.tool()
+    def degraded() -> dict:
+        # Composite with a partial (per-leg) failure.
+        return {"ok_part": 1, "_errors": ["Salesforce: nope", "OPERA: down"]}
 
     return mcp
 
@@ -189,6 +205,203 @@ class TestInstrument:
 
         record = json.loads(usage_path.read_text().strip())
         assert record["corr"] == "turn-current"
+
+
+class TestClassifyResult:
+    """Unit tests for the status classifier across raw and converted payloads."""
+
+    def test_raw_ok_dict(self):
+        assert tool_logging._classify_result({"found": True}) == ("ok", None)
+
+    def test_raw_error_dict(self):
+        status, snip = tool_logging._classify_result({"error": "boom"})
+        assert status == "error"
+        assert snip == "boom"
+
+    def test_falsy_error_value_is_ok(self):
+        # A tool that returns error=None/"" is not a failure.
+        assert tool_logging._classify_result({"error": None}) == ("ok", None)
+        assert tool_logging._classify_result({"error": ""}) == ("ok", None)
+
+    def test_raw_list_error_first_element(self):
+        status, snip = tool_logging._classify_result([{"error": "list boom"}])
+        assert status == "error"
+        assert snip == "list boom"
+
+    def test_raw_list_of_data_rows_is_ok(self):
+        # A normal multi-row list result (no leading error dict) stays ok.
+        assert tool_logging._classify_result([{"id": 1}, {"id": 2}]) == ("ok", None)
+
+    def test_degraded_on_nonempty_errors(self):
+        status, snip = tool_logging._classify_result(
+            {"ok_part": 1, "_errors": ["Salesforce: nope", "OPERA: down"]}
+        )
+        assert status == "degraded"
+        assert snip == "Salesforce: nope; OPERA: down"
+
+    def test_empty_errors_list_is_ok(self):
+        assert tool_logging._classify_result({"_errors": []}) == ("ok", None)
+
+    def test_error_wins_over_errors(self):
+        status, _ = tool_logging._classify_result(
+            {"error": "hard fail", "_errors": ["leg"]}
+        )
+        assert status == "error"
+
+    def test_converted_content_block_error(self):
+        # Live server path: convert_result=True → list[TextContent] whose .text
+        # is the JSON-dumped return value.
+        from mcp.types import TextContent
+
+        blocks = [TextContent(type="text", text=json.dumps({"error": "boom"}))]
+        status, snip = tool_logging._classify_result(blocks)
+        assert status == "error"
+        assert "boom" in snip
+
+    def test_converted_content_block_ok(self):
+        from mcp.types import TextContent
+
+        blocks = [TextContent(type="text", text=json.dumps({"found": True}))]
+        assert tool_logging._classify_result(blocks) == ("ok", None)
+
+    def test_converted_structured_tuple(self):
+        # Tool with an output schema → (unstructured, structured) tuple.
+        assert tool_logging._classify_result(([], {"error": "boom"}))[0] == "error"
+
+    def test_converted_wrap_output_tuple(self):
+        # wrap_output nests the real value under "result".
+        assert (
+            tool_logging._classify_result(([], {"result": {"error": "boom"}}))[0]
+            == "error"
+        )
+
+    def test_error_snippet_masks_email(self):
+        status, snip = tool_logging._classify_result(
+            {"error": "no customer for jane@vines.com found"}
+        )
+        assert status == "error"
+        assert "jane@vines.com" not in snip
+        assert "j***@vines.com" in snip
+
+    def test_error_snippet_clipped(self):
+        status, snip = tool_logging._classify_result({"error": "x" * 400})
+        assert status == "error"
+        assert "+100 chars" in snip
+
+
+class TestInstrumentStatus:
+    """The wrapper must record status=error/degraded for in-band failures."""
+
+    def test_inband_error_dict_logs_status_error(self, usage_path, caplog):
+        mcp = _build_mcp()
+        instrument(mcp)
+        with caplog.at_level("INFO", logger="agent_b.usage"):
+            result = asyncio.run(mcp._tool_manager.call_tool("inband_error", {}))
+
+        assert result == {"error": "boom in band"}  # tool return unchanged
+        assert "status=error" in caplog.text
+        assert "boom in band" in caplog.text
+        record = json.loads(usage_path.read_text().strip())
+        assert record["status"] == "error"
+        assert "boom in band" in record["error"]
+        # An in-band error is not a raised exception, so no error_type.
+        assert "error_type" not in record
+        # result_bytes is still recorded (schema stays additive).
+        assert isinstance(record["result_bytes"], int)
+
+    def test_list_error_first_element_logs_status_error(self, usage_path, caplog):
+        mcp = _build_mcp()
+        instrument(mcp)
+        with caplog.at_level("INFO", logger="agent_b.usage"):
+            asyncio.run(mcp._tool_manager.call_tool("list_error", {}))
+        assert "status=error" in caplog.text
+        record = json.loads(usage_path.read_text().strip())
+        assert record["status"] == "error"
+        assert "list boom" in record["error"]
+
+    def test_degraded_composite_logs_status_degraded(self, usage_path, caplog):
+        mcp = _build_mcp()
+        instrument(mcp)
+        with caplog.at_level("INFO", logger="agent_b.usage"):
+            asyncio.run(mcp._tool_manager.call_tool("degraded", {}))
+        assert "status=degraded" in caplog.text
+        record = json.loads(usage_path.read_text().strip())
+        assert record["status"] == "degraded"
+        assert "Salesforce: nope" in record["error"]
+        assert "OPERA: down" in record["error"]
+
+    def test_success_still_ok_and_no_error_field(self, usage_path, caplog):
+        mcp = _build_mcp()
+        instrument(mcp)
+        with caplog.at_level("INFO", logger="agent_b.usage"):
+            asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
+        assert "status=ok" in caplog.text
+        record = json.loads(usage_path.read_text().strip())
+        assert record["status"] == "ok"
+        assert "error" not in record
+
+
+@pytest.fixture
+def restore_log_levels():
+    """Snapshot and restore levels the configure_logging tests mutate."""
+    names = [
+        "",
+        "agent_b.usage",
+        "some.random.logger",
+        *tool_logging._NOISY_LOGGER_DEFAULTS,
+    ]
+    saved = {n: logging.getLogger(n).level for n in names}
+    try:
+        yield
+    finally:
+        for name, level in saved.items():
+            logging.getLogger(name).setLevel(level)
+
+
+class TestConfigureLogging:
+    def test_noisy_loggers_default_to_warning(self, monkeypatch, restore_log_levels):
+        monkeypatch.delenv("LOG_LEVEL", raising=False)
+        monkeypatch.delenv("LOG_LEVEL_OVERRIDES", raising=False)
+        for name in tool_logging._NOISY_LOGGER_DEFAULTS:
+            logging.getLogger(name).setLevel(logging.NOTSET)
+
+        tool_logging.configure_logging()
+
+        for name in tool_logging._NOISY_LOGGER_DEFAULTS:
+            assert logging.getLogger(name).level == logging.WARNING
+
+    def test_override_via_env(self, monkeypatch, restore_log_levels):
+        monkeypatch.setenv("LOG_LEVEL_OVERRIDES", "uvicorn.access=INFO, httpx=DEBUG")
+        tool_logging.configure_logging()
+        assert logging.getLogger("uvicorn.access").level == logging.INFO
+        assert logging.getLogger("httpx").level == logging.DEBUG
+        # A logger not named in the override keeps the WARNING default.
+        assert logging.getLogger("httpcore").level == logging.WARNING
+
+    def test_override_can_add_arbitrary_logger(self, monkeypatch, restore_log_levels):
+        monkeypatch.setenv("LOG_LEVEL_OVERRIDES", "some.random.logger=ERROR")
+        tool_logging.configure_logging()
+        assert logging.getLogger("some.random.logger").level == logging.ERROR
+
+    def test_malformed_overrides_are_ignored(self, monkeypatch, restore_log_levels):
+        monkeypatch.setenv("LOG_LEVEL_OVERRIDES", "garbage,,=INFO,httpx=DEBUG")
+        tool_logging.configure_logging()  # must not raise
+        assert logging.getLogger("httpx").level == logging.DEBUG
+
+    def test_usage_logger_stays_info_regardless_of_root(
+        self, monkeypatch, restore_log_levels
+    ):
+        monkeypatch.setenv("LOG_LEVEL", "ERROR")
+        monkeypatch.delenv("LOG_LEVEL_OVERRIDES", raising=False)
+        tool_logging.configure_logging()
+        assert logging.getLogger().level == logging.ERROR
+        assert logging.getLogger("agent_b.usage").level == logging.INFO
+
+    def test_usage_logger_pin_beats_override(self, monkeypatch, restore_log_levels):
+        # Even an explicit override can't silence the usage log.
+        monkeypatch.setenv("LOG_LEVEL_OVERRIDES", "agent_b.usage=ERROR")
+        tool_logging.configure_logging()
+        assert logging.getLogger("agent_b.usage").level == logging.INFO
 
 
 class TestCorrelationIdMiddleware:
