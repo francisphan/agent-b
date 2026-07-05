@@ -171,23 +171,24 @@ register_sf_write_tools(mcp)
 register_ns_write_tools(mcp)
 register_opportunity_tools(mcp)
 
-# Pardot: by default only a curated subset of READ tools is live (high-value
-# guest/marketing lookups). The remaining read tools and ALL write tools were
-# built out for pv-campaign-2026 and stay parked in code. Set
-# PARDOT_TOOLS_ENABLED=true to register the full Pardot surface (all reads +
-# writes). The cross-system composites (guest_360_profile, lookup_guest_by_email)
-# call pardot_client directly and are unaffected either way.
+# Pardot: pardot_enabled() (default ON) is the single on/off gate — shared with
+# pardot_client, which checks the same helper per-call so the cross-system
+# composites (guest_360_profile, lookup_guest_by_email, person_brief,
+# wine_owner_lookup) short-circuit at the client when Pardot is off. When on, an
+# explicit truthy PARDOT_TOOLS_ENABLED lights up the full read+write surface;
+# unset keeps only the curated read subset (the lean default the Sabueso bot
+# uses — the rest was built for pv-campaign-2026 and stays parked in code). Set
+# PARDOT_TOOLS_ENABLED=false to switch Pardot off entirely: skips these tools AND
+# no-ops the composites' Pardot leg.
+from src.pardot_client import pardot_enabled  # noqa: E402
 from src.pardot_tools import (  # noqa: E402
     CURATED_READ_TOOLS as PARDOT_CURATED_READ_TOOLS,
     register_tools as register_pardot_tools,
 )
 
-PARDOT_TOOLS_ENABLED = os.getenv("PARDOT_TOOLS_ENABLED", "").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
-if PARDOT_TOOLS_ENABLED:
+if not pardot_enabled():
+    logger.info("Pardot MCP tools: disabled (PARDOT_TOOLS_ENABLED is off)")
+elif os.getenv("PARDOT_TOOLS_ENABLED", "").strip().lower() in ("1", "true", "yes"):
     from src.pardot_write_tools import (  # noqa: E402
         register_tools as register_pardot_write_tools,
     )

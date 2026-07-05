@@ -85,6 +85,30 @@ def _validate_endpoint(endpoint: str) -> str:
     return endpoint
 
 
+def pardot_enabled() -> bool:
+    """Whether Pardot access is switched on (the PARDOT_TOOLS_ENABLED env flag).
+
+    The single definition of the gate, so one flag governs every path: server.py
+    checks it at registration time for the pardot_* tools, and _with_retry()
+    checks it per-call for the cross-system composites (guest_360_profile,
+    lookup_guest_by_email, person_brief, wine_owner_lookup) — which call
+    pardot_client directly and bypass tool registration. When off, _with_retry()
+    short-circuits before any auth/HTTP work, so those composites' try/except
+    degrades gracefully, and instantly.
+
+    Defaults to ENABLED when unset: production has never set this flag, so leaving
+    it unset keeps today's behaviour. Only an explicit false-y value
+    (false/0/no/off) turns Pardot off — the mirror image of OPERA, whose gate is
+    off by default.
+    """
+    return os.environ.get("PARDOT_TOOLS_ENABLED", "").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+
+
 def _get_business_unit_id() -> str:
     buid = os.environ.get("PARDOT_BUSINESS_UNIT_ID")
     if not buid:
@@ -125,7 +149,17 @@ def _refresh_session():
 
 
 def _with_retry(func):
-    """Execute func(session) with retry on transient errors and re-auth on 401."""
+    """Execute func(session) with retry on transient errors and re-auth on 401.
+
+    Short-circuits when Pardot is switched off (PARDOT_TOOLS_ENABLED false-y):
+    every Pardot HTTP call — reads, writes, and the cross-system composites'
+    Pardot leg — funnels through here, so one guard covers them all, and it fires
+    before any session build or auth work. Mirrors opera_client.query()."""
+    if not pardot_enabled():
+        raise RuntimeError(
+            "Pardot tools are disabled (PARDOT_TOOLS_ENABLED is off) — refusing "
+            "to call the Pardot API."
+        )
     session = get_session()
     last_exc = None
     for attempt in range(MAX_RETRIES):

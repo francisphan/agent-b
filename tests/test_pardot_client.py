@@ -23,6 +23,7 @@ from src.pardot_client import (
     get_list,
     get_prospect,
     get_session,
+    pardot_enabled,
     query_campaigns,
     query_email_templates,
     query_forms,
@@ -94,6 +95,56 @@ class TestRefreshSession:
 
         assert old_session is not new_session
         mock_reconnect.assert_called_once()
+
+
+# --- pardot_enabled() gate ---
+
+
+class TestPardotEnabled:
+    """The PARDOT_TOOLS_ENABLED gate — default ON, off only when explicitly false-y."""
+
+    def test_enabled_when_unset(self, monkeypatch):
+        monkeypatch.delenv("PARDOT_TOOLS_ENABLED", raising=False)
+        assert pardot_enabled() is True
+
+    def test_enabled_when_empty(self, monkeypatch):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "")
+        assert pardot_enabled() is True
+
+    @pytest.mark.parametrize("val", ["true", "1", "yes", "TRUE", " Yes ", "on", "garbage"])
+    def test_enabled_for_truthy_or_unrecognised(self, monkeypatch, val):
+        # Only explicit off values disable; anything else (incl. unknown) stays on.
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", val)
+        assert pardot_enabled() is True
+
+    @pytest.mark.parametrize("val", ["false", "0", "no", "off", "FALSE", " No "])
+    def test_disabled_for_falsey(self, monkeypatch, val):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", val)
+        assert pardot_enabled() is False
+
+
+# --- Disabled short-circuit (PARDOT_TOOLS_ENABLED off) ---
+
+
+class TestWithRetryDisabled:
+    """When Pardot is off, _with_retry raises before any auth/HTTP work — the one
+    guard that covers every read, write, and composite Pardot leg."""
+
+    def test_disabled_raises_without_running_func(self, monkeypatch):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "false")
+        ran = []
+        with pytest.raises(RuntimeError, match="disabled"):
+            _with_retry(lambda session: ran.append("ran"))
+        assert ran == []  # func never executed — no HTTP attempted
+
+    @patch("src.pardot_client.get_session")
+    def test_disabled_does_not_build_session(self, mock_get_session, monkeypatch):
+        # get_session() is where the SF token is fetched and the HTTP session is
+        # built; short-circuiting before it means no auth work happens.
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "0")
+        with pytest.raises(RuntimeError, match="PARDOT_TOOLS_ENABLED"):
+            _with_retry(lambda session: "unreachable")
+        mock_get_session.assert_not_called()
 
 
 # --- _with_retry ---
