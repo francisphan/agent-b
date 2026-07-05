@@ -1,6 +1,5 @@
 """Tests for query_validator module."""
 
-
 from src.query_validator import (
     validate_soql,
     validate_suiteql,
@@ -30,16 +29,12 @@ class TestValidateSoql:
         assert any("Account" in w for w in result["warnings"])
 
     def test_wrong_field_suggests_correction(self):
-        result = validate_soql(
-            "SELECT Id, Emal__c FROM TVRS_Guest__c LIMIT 1"
-        )
+        result = validate_soql("SELECT Id, Emal__c FROM TVRS_Guest__c LIMIT 1")
         assert result["valid"] is False
         assert any("Email__c" in w for w in result["warnings"])
 
     def test_relationship_traversal_not_flagged(self):
-        result = validate_soql(
-            "SELECT Id, Contact__r.AccountId FROM TVRS_Guest__c LIMIT 1"
-        )
+        result = validate_soql("SELECT Id, Contact__r.AccountId FROM TVRS_Guest__c LIMIT 1")
         # Relationship fields (dotted) should not be validated as bare fields
         assert result["valid"] is True
 

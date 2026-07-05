@@ -1,7 +1,13 @@
 """Salesforce write MCP tool definitions (create, update, delete, upsert)."""
 
 from src.auth import require_write_access
-from src.sf_client import create_record, update_record, delete_record, upsert_record, bulk_operation
+from src.sf_client import (
+    create_record,
+    update_record,
+    delete_record,
+    upsert_record,
+    bulk_operation,
+)
 
 
 def register_tools(mcp):
@@ -132,7 +138,9 @@ def register_tools(mcp):
         operation = operation.lower().strip()
         allowed_ops = ("insert", "update", "upsert", "delete")
         if operation not in allowed_ops:
-            return {"error": f"Invalid operation '{operation}'. Must be one of: {', '.join(allowed_ops)}"}
+            return {
+                "error": f"Invalid operation '{operation}'. Must be one of: {', '.join(allowed_ops)}"
+            }
 
         if operation == "upsert" and not external_id_field:
             return {"error": "external_id_field is required for upsert operations."}

@@ -17,6 +17,7 @@ def mcp_with_tools():
         def wrapper(func):
             registered[func.__name__] = func
             return func
+
         return wrapper
 
     mcp.tool = tool_decorator
@@ -125,9 +126,7 @@ class TestPardotUpdateProspect:
     @patch("src.pardot_write_tools.require_write_access")
     def test_success(self, mock_auth, mock_update, mcp_with_tools):
         mock_update.return_value = {"id": "100", "firstName": "Updated"}
-        result = mcp_with_tools["pardot_update_prospect"](
-            "100", {"firstName": "Updated"}
-        )
+        result = mcp_with_tools["pardot_update_prospect"]("100", {"firstName": "Updated"})
         mock_auth.assert_called_once()
         mock_update.assert_called_once_with("100", {"firstName": "Updated"})
         assert result["firstName"] == "Updated"

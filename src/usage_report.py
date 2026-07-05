@@ -80,9 +80,7 @@ def aggregate(records: list[dict]) -> dict[str, Any]:
     # In-band errors ({"error": ...} returns) carry no error_type — they aren't
     # raised exceptions — so label them "(in-band)" rather than "Unknown".
     error_types: Counter = Counter(
-        (r.get("error_type") or "(in-band)")
-        for r in records
-        if r.get("status") == "error"
+        (r.get("error_type") or "(in-band)") for r in records if r.get("status") == "error"
     )
 
     durations: dict[str, list[float]] = defaultdict(list)
@@ -177,9 +175,7 @@ def _aggregate_turns(records: list[dict]) -> dict[str, Any]:
         "untagged_calls": untagged,
         "with_errors": sum(1 for t in items if t["errors"]),
         "calls_per_turn": {
-            "avg": round(sum(calls_per_turn) / len(calls_per_turn), 1)
-            if calls_per_turn
-            else None,
+            "avg": round(sum(calls_per_turn) / len(calls_per_turn), 1) if calls_per_turn else None,
             "p50": _percentile([float(c) for c in calls_per_turn], 0.50),
             "p95": _percentile([float(c) for c in calls_per_turn], 0.95),
             "max": max(calls_per_turn) if calls_per_turn else None,

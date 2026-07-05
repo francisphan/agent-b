@@ -11,9 +11,7 @@ from src.ns_tools import register_tools
 def _call(query: str, **kwargs):
     mcp = FastMCP("test")
     register_tools(mcp)
-    return asyncio.run(
-        mcp._tool_manager.call_tool("ns_suiteql_query", {"query": query, **kwargs})
-    )
+    return asyncio.run(mcp._tool_manager.call_tool("ns_suiteql_query", {"query": query, **kwargs}))
 
 
 class TestSuiteqlPreflight:

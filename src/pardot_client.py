@@ -69,6 +69,7 @@ def _log_pardot_error(exc: Exception, will_retry: bool) -> None:
     else:
         logger.log(level, "Pardot request failed%s: %s", note, _clip(repr(exc)))
 
+
 # Pattern for safe path segments (each part between slashes in endpoint strings).
 # Allows alphanumeric, hyphens, dots, underscores — no traversal.
 _SAFE_SEGMENT_RE = re.compile(r"^[a-zA-Z0-9._@+%-]+$")
@@ -248,9 +249,7 @@ def _get(endpoint: str, params: dict | None = None) -> dict | list:
             # skips retrying other 4xx.
             error_body = _clip(resp.text, _MAX_ERROR_DETAIL) if resp.text else "(empty)"
             prefix = f"{resp.status_code} {resp.reason}" if resp.reason else str(resp.status_code)
-            raise requests.exceptions.HTTPError(
-                f"{prefix}: {error_body}", response=resp
-            )
+            raise requests.exceptions.HTTPError(f"{prefix}: {error_body}", response=resp)
         return resp.json()
 
     return _with_retry(_do)
@@ -743,6 +742,7 @@ def _convert_hml_to_pardot_tags(html: str) -> str:
     replacing {{Recipient.FirstName}} with %%first_name%%.
     """
     import re
+
     # Unsubscribe / preference center
     html = html.replace("{{EmailPreferenceCenter}}", "%%email_preference_center%%")
     html = html.replace("{{UnsubscribeLink}}", "%%unsubscribe%%")
@@ -751,8 +751,8 @@ def _convert_hml_to_pardot_tags(html: str) -> str:
     # Collapse to just the if-branch content; the unless-branch is dropped.
     # {{Recipient.FirstName}} inside the kept branch is converted to %%first_name%% below.
     html = re.sub(
-        r'\{\{#if Recipient\.FirstName\}\}(.*?)\{\{/if\}\}\{\{#unless Recipient\.FirstName\}\}(.*?)\{\{/unless\}\}',
-        r'\1',
+        r"\{\{#if Recipient\.FirstName\}\}(.*?)\{\{/if\}\}\{\{#unless Recipient\.FirstName\}\}(.*?)\{\{/unless\}\}",
+        r"\1",
         html,
         flags=re.DOTALL,
     )
@@ -1403,14 +1403,10 @@ def remove_tag(object_type: str, object_id: str, tag_id: int) -> dict:
 
 def assign_visitor_to_prospect(visitor_id: str, prospect_id: str) -> dict:
     """POST /visitors/{id}/do/assignToProspect."""
-    return _post(
-        f"visitors/{visitor_id}/do/assignToProspect", {"prospectId": prospect_id}
-    )
+    return _post(f"visitors/{visitor_id}/do/assignToProspect", {"prospectId": prospect_id})
 
 
-def connect_campaign_to_salesforce(
-    campaign_id: str, salesforce_campaign_id: str
-) -> dict:
+def connect_campaign_to_salesforce(campaign_id: str, salesforce_campaign_id: str) -> dict:
     """POST /campaigns/{id}/do/connectSalesforceCampaign."""
     return _post(
         f"campaigns/{campaign_id}/do/connectSalesforceCampaign",

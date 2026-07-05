@@ -27,8 +27,8 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TTL = 3600       # 1 hour
-_DEFAULT_REFRESH = 1800   # 30 minutes
+_DEFAULT_TTL = 3600  # 1 hour
+_DEFAULT_REFRESH = 1800  # 30 minutes
 
 
 class _CacheEntry:
@@ -115,7 +115,9 @@ class SchemaCache:
                     self._store[key] = _CacheEntry(value, time.monotonic())
                 logger.debug("Schema cache refreshed: %s", key)
             except Exception:
-                logger.warning("Schema cache refresh failed for %s; keeping stale value", key, exc_info=True)
+                logger.warning(
+                    "Schema cache refresh failed for %s; keeping stale value", key, exc_info=True
+                )
 
     # ------------------------------------------------------------------
     # Public API — Salesforce

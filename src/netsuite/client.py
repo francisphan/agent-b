@@ -103,9 +103,7 @@ class NetSuiteClient:
                 )
                 retryable = connect_phase or method.upper() in _IDEMPOTENT_METHODS
                 if retryable and attempt < self._config.max_retries:
-                    wait = calculate_backoff(
-                        attempt, None, self._config.retry_backoff_factor
-                    )
+                    wait = calculate_backoff(attempt, None, self._config.retry_backoff_factor)
                     time.sleep(wait)
                     last_exc = exc
                     continue
@@ -121,23 +119,17 @@ class NetSuiteClient:
             will_retry = (
                 response.status_code == 429 or response.status_code >= 500
             ) and attempt < self._config.max_retries
-            self._log_response_error(
-                method, path, params, json, response, attempt, will_retry
-            )
+            self._log_response_error(method, path, params, json, response, attempt, will_retry)
 
             if response.status_code == 429 and attempt < self._config.max_retries:
                 retry_after = parse_retry_after(response)
-                wait = calculate_backoff(
-                    attempt, retry_after, self._config.retry_backoff_factor
-                )
+                wait = calculate_backoff(attempt, retry_after, self._config.retry_backoff_factor)
                 time.sleep(wait)
                 last_exc = exc
                 continue
 
             if response.status_code >= 500 and attempt < self._config.max_retries:
-                wait = calculate_backoff(
-                    attempt, None, self._config.retry_backoff_factor
-                )
+                wait = calculate_backoff(attempt, None, self._config.retry_backoff_factor)
                 time.sleep(wait)
                 last_exc = exc
                 continue

@@ -22,6 +22,4 @@ class MetadataApi:
         return self._client._request_sync("GET", self._base_path, params=params)
 
     def get_record_schema(self, record_type: str) -> dict[str, Any]:
-        return self._client._request_sync(
-            "GET", f"{self._base_path}/{record_type}"
-        )
+        return self._client._request_sync("GET", f"{self._base_path}/{record_type}")

@@ -26,6 +26,7 @@ def mcp_with_tools():
         def wrapper(func):
             registered[func.__name__] = func
             return func
+
         return wrapper
 
     mcp.tool = tool_decorator
@@ -180,7 +181,9 @@ class TestQueryListMemberships:
     def test_success_with_filters(self, mock_qlm, mcp_with_tools):
         mock_qlm.return_value = {"values": []}
         mcp_with_tools["pardot_query_list_memberships"](list_id="10", prospect_id="20")
-        mock_qlm.assert_called_once_with({"fields": DEFAULT_LIST_MEMBERSHIP_FIELDS, "listId": "10", "prospectId": "20"})
+        mock_qlm.assert_called_once_with(
+            {"fields": DEFAULT_LIST_MEMBERSHIP_FIELDS, "listId": "10", "prospectId": "20"}
+        )
 
     @patch("src.pardot_tools.query_list_memberships")
     def test_error(self, mock_qlm, mcp_with_tools):
@@ -223,7 +226,12 @@ class TestQueryVisitorActivities:
             prospect_id="1", activity_type="Visit", limit=50
         )
         mock_qva.assert_called_once_with(
-            {"fields": DEFAULT_VISITOR_ACTIVITY_FIELDS, "prospectId": "1", "type": "Visit", "limit": 50}
+            {
+                "fields": DEFAULT_VISITOR_ACTIVITY_FIELDS,
+                "prospectId": "1",
+                "type": "Visit",
+                "limit": 50,
+            }
         )
 
     @patch("src.pardot_tools.query_visitor_activities")

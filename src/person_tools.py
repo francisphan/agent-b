@@ -130,9 +130,7 @@ def _ns_customers_by_name(anchor: str) -> list[dict]:
 def _ns_owner_by_email(email: str) -> dict | None:
     e = escape_suiteql(email.lower())
     try:
-        rows = suiteql_query(
-            f"SELECT {_NS_OWNER_COLS} FROM customer WHERE LOWER(email) = '{e}'"
-        )
+        rows = suiteql_query(f"SELECT {_NS_OWNER_COLS} FROM customer WHERE LOWER(email) = '{e}'")
     except Exception:  # noqa: BLE001
         return None
     rows = [r for r in rows if isinstance(r, dict) and "error" not in r]
@@ -325,9 +323,7 @@ def _resolve(query: str) -> tuple[list[dict], str]:
         sf0 = sf_rows[0] if sf_rows and isinstance(sf_rows[0], dict) else {}
         name = (
             (owner_row or {}).get("companyname")
-            or " ".join(
-                p for p in [sf0.get("FirstName"), sf0.get("LastName")] if p
-            ).strip()
+            or " ".join(p for p in [sf0.get("FirstName"), sf0.get("LastName")] if p).strip()
             or email
         )
         cand = {
@@ -360,9 +356,7 @@ def _resolve(query: str) -> tuple[list[dict], str]:
         name = " ".join(p for p in [r.get("FirstName"), r.get("LastName")] if p).strip()
         email = (r.get("Email") or "").lower() or None
         k = _key(email, name)
-        c = merged.setdefault(
-            k, {"name": name, "email": email, "owner": None, "score": 0.0}
-        )
+        c = merged.setdefault(k, {"name": name, "email": email, "owner": None, "score": 0.0})
         c["name"] = c["name"] or name
         c["email"] = c["email"] or email
         c["sf_contact_id"] = r.get("Id")
@@ -374,9 +368,7 @@ def _resolve(query: str) -> tuple[list[dict], str]:
         name = r.get("companyname") or r.get("entityid") or ""
         email = (r.get("email") or "").lower() or None
         k = _key(email, name)
-        c = merged.setdefault(
-            k, {"name": name, "email": email, "owner": None, "score": 0.0}
-        )
+        c = merged.setdefault(k, {"name": name, "email": email, "owner": None, "score": 0.0})
         c["name"] = c["name"] or name
         c["email"] = c["email"] or email
         c["owner"] = _ns_owner_summary(r)
@@ -497,9 +489,7 @@ def build_person_brief(query: str, deep: bool = True) -> dict:
 
     # CS rep: NetSuite account manager for vineyard owners; else the owner of the
     # most recent won opportunity (covers villa owners with no NetSuite record).
-    cs_rep = ns_owner.get("cs_rep") or (
-        _slim_opp(won[0]).get("owner") if won else None
-    )
+    cs_rep = ns_owner.get("cs_rep") or (_slim_opp(won[0]).get("owner") if won else None)
 
     out["ownership"] = {
         "is_owner": vineyard_owner or villa_owner,
@@ -561,9 +551,7 @@ def build_person_brief(query: str, deep: bool = True) -> dict:
             out["stays_opera"] = p.get("stays_opera")
             out["financials"] = p.get("financials")
             out["marketing"] = p.get("marketing")
-            out["system_ids"].update(
-                {k: v for k, v in (p.get("system_ids") or {}).items() if v}
-            )
+            out["system_ids"].update({k: v for k, v in (p.get("system_ids") or {}).items() if v})
             if p.get("_errors"):
                 out["_errors"] = p["_errors"]
         except Exception as e:  # noqa: BLE001 — deep section is best-effort

@@ -28,6 +28,7 @@ class TestRegistration:
             def decorator(fn):
                 captured[fn.__name__] = fn
                 return fn
+
             return decorator
 
         mcp.tool = capture_tool
@@ -109,14 +110,30 @@ class TestFindWines:
             q = query.lower()
             if "from item" in q:
                 return [
-                    {"id": "1", "itemid": "VTA3322-18 DOS ABOGADOS Malbec BF 2018 750ML",
-                     "displayname": None, "itemtype": "InvtPart"},
-                    {"id": "2", "itemid": "ET-MBRRBPR-CARD-01", "displayname": "Primrose",
-                     "itemtype": "InvtPart"},
-                    {"id": "3", "itemid": "CT-MBRRBPR-CARD-01", "displayname": "Primrose",
-                     "itemtype": "InvtPart"},
-                    {"id": "4", "itemid": "Dos Abogados SP Malbec", "displayname": None,
-                     "itemtype": "Assembly"},
+                    {
+                        "id": "1",
+                        "itemid": "VTA3322-18 DOS ABOGADOS Malbec BF 2018 750ML",
+                        "displayname": None,
+                        "itemtype": "InvtPart",
+                    },
+                    {
+                        "id": "2",
+                        "itemid": "ET-MBRRBPR-CARD-01",
+                        "displayname": "Primrose",
+                        "itemtype": "InvtPart",
+                    },
+                    {
+                        "id": "3",
+                        "itemid": "CT-MBRRBPR-CARD-01",
+                        "displayname": "Primrose",
+                        "itemtype": "InvtPart",
+                    },
+                    {
+                        "id": "4",
+                        "itemid": "Dos Abogados SP Malbec",
+                        "displayname": None,
+                        "itemtype": "Assembly",
+                    },
                 ]
             if "from inventorybalance" in q:
                 return [{"item": "1", "qavail": "264", "qoh": "264"}]
@@ -131,8 +148,14 @@ class TestFindWines:
         def side_effect(query, *a, **k):
             q = query.lower()
             if "from item" in q:
-                return [{"id": "1", "itemid": "Pyrus SP Malbec", "displayname": None,
-                         "itemtype": "Assembly"}]
+                return [
+                    {
+                        "id": "1",
+                        "itemid": "Pyrus SP Malbec",
+                        "displayname": None,
+                        "itemtype": "Assembly",
+                    }
+                ]
             if "from inventorybalance" in q:
                 return [{"item": "1", "qavail": "n/a", "qoh": None}]
             return []
@@ -162,18 +185,36 @@ def _fake_query(*, candidates, items=None, balances=None):
 
 
 CANDIDATES = [
-    {"id": "681", "entityid": "Evans, Michael Haydn", "companyname": "Evans, Michael Haydn",
-     "brand": "Uco´s Playground", "owner_code": "EVAM", "isinactive": "F"},
-    {"id": "647", "entityid": "Carlson, Donald", "companyname": "Carlson, Donald",
-     "brand": "Dos Abogados", "owner_code": "CARD", "isinactive": "F"},
+    {
+        "id": "681",
+        "entityid": "Evans, Michael Haydn",
+        "companyname": "Evans, Michael Haydn",
+        "brand": "Uco´s Playground",
+        "owner_code": "EVAM",
+        "isinactive": "F",
+    },
+    {
+        "id": "647",
+        "entityid": "Carlson, Donald",
+        "companyname": "Carlson, Donald",
+        "brand": "Dos Abogados",
+        "owner_code": "CARD",
+        "isinactive": "F",
+    },
 ]
 
 OWNER_RECORD = {
-    "id": "681", "companyName": "Evans, Michael Haydn", "entityId": "Evans, Michael Haydn",
-    "email": "michael@vinesofmendoza.com", "custentity_vom_winebrandname": "Uco´s Playground",
-    "custentity_vom_ownercode": "EVAM", "custentity_vom_salesforceid": "003i000000GwGys",
-    "custentity37": "Evans Vineyard", "custentity_vom_numberoflots": 2,
-    "category": {"refName": "Ownership Group"}, "isInactive": False,
+    "id": "681",
+    "companyName": "Evans, Michael Haydn",
+    "entityId": "Evans, Michael Haydn",
+    "email": "michael@vinesofmendoza.com",
+    "custentity_vom_winebrandname": "Uco´s Playground",
+    "custentity_vom_ownercode": "EVAM",
+    "custentity_vom_salesforceid": "003i000000GwGys",
+    "custentity37": "Evans Vineyard",
+    "custentity_vom_numberoflots": 2,
+    "category": {"refName": "Ownership Group"},
+    "isInactive": False,
 }
 
 
@@ -193,7 +234,9 @@ class TestWinemaking:
     def test_parse_batch_cooperage(self):
         assert _parse_batch_cooperage("BA10228-CARD-19-63-2017-Boutes") == ("2017", "Boutes")
         assert _parse_batch_cooperage("BA10410-CARD-19-111-2017-Seguin Moreaux") == (
-            "2017", "Seguin Moreaux")
+            "2017",
+            "Seguin Moreaux",
+        )
         assert _parse_batch_cooperage("BA10869-CARD-2020") == ("2020", None)
         assert _parse_batch_cooperage("BA10903-CARD-2018-06") == ("2018", None)
         assert _parse_batch_cooperage("") == (None, None)
@@ -202,16 +245,32 @@ class TestWinemaking:
     def test_winemaking_details_maps_and_joins_cooperage(self, mock_q):
         def side_effect(query, *a, **k):
             if "customrecord_ce_batch" in query:
-                return [{"batch": "BA1-CARD-19-1-2019-Boutes"},
-                        {"batch": "BA2-CARD-19-2-2019-Brieve"},
-                        {"batch": "BA3-CARD-19-3-2020-Demptos"}]
+                return [
+                    {"batch": "BA1-CARD-19-1-2019-Boutes"},
+                    {"batch": "BA2-CARD-19-2-2019-Brieve"},
+                    {"batch": "BA3-CARD-19-3-2020-Demptos"},
+                ]
             return [
-                {"vintage": "2019", "varietal": "Malbec", "wine_type": "Red",
-                 "quality": "Super Premium", "production": "Propio", "blend": "100% MB",
-                 "abv": "14.8", "barrel_name": "Dos Abogados", "new_oak_barrels": "1",
-                 "blended": "7/8/2020", "bottled": "2/12/2021"},
-                {"vintage": "2020", "varietal": "Blend", "production": "Tercero",
-                 "blended": "#N/A", "bottled": "6/14/2022"},
+                {
+                    "vintage": "2019",
+                    "varietal": "Malbec",
+                    "wine_type": "Red",
+                    "quality": "Super Premium",
+                    "production": "Propio",
+                    "blend": "100% MB",
+                    "abv": "14.8",
+                    "barrel_name": "Dos Abogados",
+                    "new_oak_barrels": "1",
+                    "blended": "7/8/2020",
+                    "bottled": "2/12/2021",
+                },
+                {
+                    "vintage": "2020",
+                    "varietal": "Blend",
+                    "production": "Tercero",
+                    "blended": "#N/A",
+                    "bottled": "6/14/2022",
+                },
             ]
 
         mock_q.side_effect = side_effect
@@ -230,13 +289,33 @@ class TestWinemaking:
         # Same wine recorded twice (export lots); one row fills the dates the
         # other left blank. Should collapse to ONE entry with the dates merged in.
         mock_q.return_value = [
-            {"vintage": "2022", "varietal": "Malbec", "production": "Tercero",
-             "blend": "100% MB", "abv": "14", "blended": None, "bottled": None},
-            {"vintage": "2022", "varietal": "Malbec", "production": "Tercero",
-             "blend": "100% MB", "abv": "14", "blended": "7/27/2023",
-             "bottled": "2/27/2024"},
-            {"vintage": "2021", "varietal": "Malbec", "production": "Tercero",
-             "blend": "100% MB", "abv": "14.2", "blended": None, "bottled": None},
+            {
+                "vintage": "2022",
+                "varietal": "Malbec",
+                "production": "Tercero",
+                "blend": "100% MB",
+                "abv": "14",
+                "blended": None,
+                "bottled": None,
+            },
+            {
+                "vintage": "2022",
+                "varietal": "Malbec",
+                "production": "Tercero",
+                "blend": "100% MB",
+                "abv": "14",
+                "blended": "7/27/2023",
+                "bottled": "2/27/2024",
+            },
+            {
+                "vintage": "2021",
+                "varietal": "Malbec",
+                "production": "Tercero",
+                "blend": "100% MB",
+                "abv": "14.2",
+                "blended": None,
+                "bottled": None,
+            },
         ]
         rows = _winemaking_details(769)  # no owner_code → no cooperage query
         assert len(rows) == 2  # two distinct wines (2022 + 2021)
@@ -258,11 +337,19 @@ class TestLookupWineOwner:
         mock_q.side_effect = _fake_query(
             candidates=CANDIDATES,
             items=[
-                {"id": "29180", "itemid": "Uco's Playground SP Cabernet", "displayname": None,
-                 "itemtype": "Assembly"},
+                {
+                    "id": "29180",
+                    "itemid": "Uco's Playground SP Cabernet",
+                    "displayname": None,
+                    "itemtype": "Assembly",
+                },
                 # Pure packaging component (named exactly after the brand) — dropped.
-                {"id": "20999", "itemid": "ET-CFRRESP-EVAM-02", "displayname": "Uco´s Playground",
-                 "itemtype": "InvtPart"},
+                {
+                    "id": "20999",
+                    "itemid": "ET-CFRRESP-EVAM-02",
+                    "displayname": "Uco´s Playground",
+                    "itemtype": "InvtPart",
+                },
             ],
             balances=[{"item": "29180", "qavail": "120", "qoh": "120"}],
         )
@@ -316,12 +403,21 @@ class TestLookupWineOwner:
     @patch("src.wine_tools.suiteql_query")
     def test_lone_partial_match_is_low_confidence(self, mock_q, mock_get, mock_360):
         candidates = [
-            {"id": "100", "entityid": "Smith, John", "companyname": "Smith, John",
-             "brand": "Smith Family Estate", "owner_code": "SMIJ", "isinactive": "F"},
+            {
+                "id": "100",
+                "entityid": "Smith, John",
+                "companyname": "Smith, John",
+                "brand": "Smith Family Estate",
+                "owner_code": "SMIJ",
+                "isinactive": "F",
+            },
         ]
         mock_q.side_effect = _fake_query(candidates=candidates, items=[], balances=[])
-        mock_get.return_value = {"id": "100", "companyName": "Smith, John",
-                                 "custentity_vom_winebrandname": "Smith Family Estate"}
+        mock_get.return_value = {
+            "id": "100",
+            "companyName": "Smith, John",
+            "custentity_vom_winebrandname": "Smith Family Estate",
+        }
         r = lookup_wine_owner("Smith")
         assert r["match_status"] == "low_confidence"
         assert r["match_confidence"] == "low"
@@ -345,14 +441,29 @@ class TestLookupWineOwner:
     @patch("src.wine_tools.suiteql_query")
     def test_ambiguous_co_ownership(self, mock_q, mock_get, mock_360):
         shared = [
-            {"id": "724", "entityid": "Heylen, Wim", "companyname": "Heylen, Wim",
-             "brand": "Angelus XXI", "owner_code": "HEYW", "isinactive": "T"},
-            {"id": "8503", "entityid": "De Krock, Ann", "companyname": "De Krock, Ann",
-             "brand": "Angelus XXI", "owner_code": None, "isinactive": "T"},
+            {
+                "id": "724",
+                "entityid": "Heylen, Wim",
+                "companyname": "Heylen, Wim",
+                "brand": "Angelus XXI",
+                "owner_code": "HEYW",
+                "isinactive": "T",
+            },
+            {
+                "id": "8503",
+                "entityid": "De Krock, Ann",
+                "companyname": "De Krock, Ann",
+                "brand": "Angelus XXI",
+                "owner_code": None,
+                "isinactive": "T",
+            },
         ]
         mock_q.side_effect = _fake_query(candidates=shared, items=[], balances=[])
-        mock_get.return_value = {"id": "724", "companyName": "Heylen, Wim",
-                                 "custentity_vom_winebrandname": "Angelus XXI"}
+        mock_get.return_value = {
+            "id": "724",
+            "companyName": "Heylen, Wim",
+            "custentity_vom_winebrandname": "Angelus XXI",
+        }
         r = lookup_wine_owner("Angelus XXI")
         assert r["match_status"] == "ambiguous"
         assert any(a["customer_id"] == "8503" for a in r["alternates"])

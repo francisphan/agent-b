@@ -32,11 +32,45 @@ _BRAND_SPLIT = re.compile(r"\s*(?:[,/&·•]|\s-\s|\bx\b)\s*", re.IGNORECASE)
 # reading "Malbec Super Premium" doesn't spuriously match on those tokens.
 _STOPWORDS = frozenset(
     {
-        "wine", "wines", "winery", "vineyard", "vineyards", "bodega", "vinedos",
-        "the", "and", "de", "la", "el", "los", "las", "del", "di", "do", "dos",
-        "malbec", "cabernet", "sauvignon", "merlot", "bonarda", "syrah", "blend",
-        "red", "white", "rose", "tinto", "blanco", "reserva", "premium", "super",
-        "750", "ml", "cc", "vintage", "estate", "ros",
+        "wine",
+        "wines",
+        "winery",
+        "vineyard",
+        "vineyards",
+        "bodega",
+        "vinedos",
+        "the",
+        "and",
+        "de",
+        "la",
+        "el",
+        "los",
+        "las",
+        "del",
+        "di",
+        "do",
+        "dos",
+        "malbec",
+        "cabernet",
+        "sauvignon",
+        "merlot",
+        "bonarda",
+        "syrah",
+        "blend",
+        "red",
+        "white",
+        "rose",
+        "tinto",
+        "blanco",
+        "reserva",
+        "premium",
+        "super",
+        "750",
+        "ml",
+        "cc",
+        "vintage",
+        "estate",
+        "ros",
     }
 )
 
@@ -214,8 +248,7 @@ def _find_wines(brand: str, owner_code: str | None = None) -> list[dict]:
         reverse=True,
     )[:3]
     clauses = [
-        f"LOWER(displayname) LIKE '%{t}%' OR LOWER(itemid) LIKE '%{t}%'"
-        for t in distinctive
+        f"LOWER(displayname) LIKE '%{t}%' OR LOWER(itemid) LIKE '%{t}%'" for t in distinctive
     ]
     code = re.sub(r"[^a-z0-9]", "", (owner_code or "").lower())
     if len(code) >= 3:
@@ -397,8 +430,13 @@ def _winemaking_details(customer_id, owner_code=None) -> list[dict]:
             "aging_months_est": _aging_months(r.get("blended"), r.get("bottled")),
             "cooperages": [],
         }
-        key = (entry["vintage"], entry["varietal"], entry["blend"],
-               entry["production"], entry["abv"])
+        key = (
+            entry["vintage"],
+            entry["varietal"],
+            entry["blend"],
+            entry["production"],
+            entry["abv"],
+        )
         kept = by_key.get(key)
         if kept is None:
             by_key[key] = entry

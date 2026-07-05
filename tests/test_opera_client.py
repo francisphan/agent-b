@@ -13,9 +13,7 @@ class TestAssertReadOnly:
         assert_read_only("SELECT 1 FROM DUAL")
 
     def test_select_with_named_binds_passes(self):
-        assert_read_only(
-            "SELECT NAME_ID FROM OPERA.NAME WHERE LAST = :last AND NAME_TYPE = 'D'"
-        )
+        assert_read_only("SELECT NAME_ID FROM OPERA.NAME WHERE LAST = :last AND NAME_TYPE = 'D'")
 
     def test_with_clause_passes(self):
         assert_read_only(

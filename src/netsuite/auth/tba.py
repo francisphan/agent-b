@@ -23,9 +23,7 @@ class TBAAuth(NetSuiteAuth):
         self._config = config
         self._realm = realm
 
-    def auth_flow(
-        self, request: httpx.Request
-    ) -> Generator[httpx.Request, httpx.Response, None]:
+    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
         nonce = secrets.token_hex(16)
         timestamp = str(int(time.time()))
 
@@ -44,9 +42,7 @@ class TBAAuth(NetSuiteAuth):
         request.headers["Authorization"] = self._build_header(oauth_params)
         yield request
 
-    def _compute_signature(
-        self, request: httpx.Request, oauth_params: dict[str, str]
-    ) -> str:
+    def _compute_signature(self, request: httpx.Request, oauth_params: dict[str, str]) -> str:
         method = request.method.upper()
 
         url = request.url.copy_with(query=None, fragment=None)
@@ -59,11 +55,13 @@ class TBAAuth(NetSuiteAuth):
         sorted_params = sorted(all_params.items())
         normalized_params = urlencode(sorted_params, quote_via=quote)
 
-        base_string = "&".join([
-            _percent_encode(method),
-            _percent_encode(base_url),
-            _percent_encode(normalized_params),
-        ])
+        base_string = "&".join(
+            [
+                _percent_encode(method),
+                _percent_encode(base_url),
+                _percent_encode(normalized_params),
+            ]
+        )
 
         signing_key = (
             _percent_encode(self._config.consumer_secret)

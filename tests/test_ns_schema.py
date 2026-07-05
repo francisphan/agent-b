@@ -16,8 +16,14 @@ class TestNsSchemaModule:
 
     def test_schema_has_expected_record_types(self):
         expected = {
-            "customer", "salesOrder", "invoice", "item",
-            "transaction", "vendor", "employee", "contact",
+            "customer",
+            "salesOrder",
+            "invoice",
+            "item",
+            "transaction",
+            "vendor",
+            "employee",
+            "contact",
         }
         assert expected == set(SCHEMA.keys())
 
@@ -107,10 +113,12 @@ class TestNsGetNetsuiteSchema:
             def decorator(fn):
                 captured[fn.__name__] = fn
                 return fn
+
             return decorator
 
         mcp.tool = capture_tool
         from src.ns_tools import register_tools
+
         register_tools(mcp)
         return captured["ns_get_netsuite_schema"]
 

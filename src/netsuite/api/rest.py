@@ -51,9 +51,7 @@ class RestApi:
         )
 
     def create(self, record_type: str, body: dict[str, Any]) -> dict[str, Any]:
-        return self._client._request_sync(
-            "POST", self._record_path(record_type), json=body
-        )
+        return self._client._request_sync("POST", self._record_path(record_type), json=body)
 
     def update(
         self, record_type: str, record_id: str | int, body: dict[str, Any]
@@ -70,9 +68,7 @@ class RestApi:
         )
 
     def delete(self, record_type: str, record_id: str | int) -> None:
-        self._client._request_sync(
-            "DELETE", self._record_path(record_type, record_id)
-        )
+        self._client._request_sync("DELETE", self._record_path(record_type, record_id))
 
     def list(
         self,
@@ -85,9 +81,7 @@ class RestApi:
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if q:
             params["q"] = q
-        raw = self._client._request_sync(
-            "GET", self._record_path(record_type), params=params
-        )
+        raw = self._client._request_sync("GET", self._record_path(record_type), params=params)
         return PaginatedResponse.model_validate(raw)
 
     def list_pages(

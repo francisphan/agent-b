@@ -81,7 +81,7 @@ def escape_suiteql_like(value: str) -> str:
 # Characters reserved by Salesforce SOSL that must be backslash-escaped inside
 # the FIND {…} clause.  Reference:
 # https://developer.salesforce.com/docs/atlas.en-us.soql_sosl.meta/soql_sosl/sforce_api_calls_sosl_find.htm
-_SOSL_RESERVED = set('?&|!{}[]()^~*:\\\'-+"')
+_SOSL_RESERVED = set("?&|!{}[]()^~*:\\'-+\"")
 
 
 def escape_sosl(value: str) -> str:
@@ -128,8 +128,7 @@ def validate_object_name(value: str) -> str:
     """
     if not _OBJECT_NAME_PATTERN.match(value):
         raise ValueError(
-            f"Invalid object name: {value!r}. "
-            "Must match [a-zA-Z_][a-zA-Z0-9_]{{0,99}}."
+            f"Invalid object name: {value!r}. Must match [a-zA-Z_][a-zA-Z0-9_]{{{{0,99}}}}."
         )
     return value
 

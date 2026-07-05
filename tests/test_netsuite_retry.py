@@ -91,9 +91,7 @@ class TestNonSuccessLogging:
         sql = "SELECT id FROM nonexistent_table"
         with caplog.at_level("WARNING", logger="src.netsuite.client"):
             with pytest.raises(ValidationError):
-                c._request_sync(
-                    "POST", "/services/rest/query/v1/suiteql", json={"q": sql}
-                )
+                c._request_sync("POST", "/services/rest/query/v1/suiteql", json={"q": sql})
         # Terminal (non-retryable) 400 logs at ERROR with the query + NetSuite body.
         assert http.request.call_count == 1
         rec = next(r for r in caplog.records if r.levelname == "ERROR")
@@ -141,9 +139,7 @@ class TestErrorMessageDetail:
         )
         http.request.return_value = _err(400, title="Bad Request", detail=detail)
         with pytest.raises(ValidationError) as exc_info:
-            c._request_sync(
-                "POST", "/services/rest/query/v1/suiteql", json={"q": "..."}
-            )
+            c._request_sync("POST", "/services/rest/query/v1/suiteql", json={"q": "..."})
         msg = str(exc_info.value)
         assert "Bad Request" in msg  # title prefix preserved
         assert detail in msg  # NetSuite's actionable detail

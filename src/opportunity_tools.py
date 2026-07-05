@@ -72,15 +72,13 @@ def _accounts_for(person: str) -> list[dict]:
         ):
             _add(r.get("Id"), r.get("Name"), r.get("PersonEmail"))
         for r in _run(
-            "SELECT Id, AccountId, Account.Name, Email FROM Contact "
-            f"WHERE Email = '{e}' LIMIT 10"
+            f"SELECT Id, AccountId, Account.Name, Email FROM Contact WHERE Email = '{e}' LIMIT 10"
         ):
             _add(r.get("AccountId"), (r.get("Account") or {}).get("Name"), r.get("Email"))
     else:
         like = escape_soql_like(p)
         for r in _run(
-            "SELECT Id, Name, PersonEmail FROM Account "
-            f"WHERE Name LIKE '%{like}%' LIMIT 25"
+            f"SELECT Id, Name, PersonEmail FROM Account WHERE Name LIKE '%{like}%' LIMIT 25"
         ):
             _add(r.get("Id"), r.get("Name"), r.get("PersonEmail"))
         tokens = [t for t in re.sub(r"[^a-z0-9 ]", " ", p.lower()).split() if len(t) >= 2]
@@ -105,11 +103,7 @@ def _name_confident(query: str, account_name: str | None) -> bool:
     (e.g. "Ana" substring-matching "Susana Lopez") when resolving by name."""
 
     def toks(s: str | None) -> set[str]:
-        return {
-            t
-            for t in re.sub(r"[^a-z0-9 ]", " ", (s or "").lower()).split()
-            if len(t) >= 2
-        }
+        return {t for t in re.sub(r"[^a-z0-9 ]", " ", (s or "").lower()).split() if len(t) >= 2}
 
     q, n = toks(query), toks(account_name)
     return bool(q) and bool(n) and q <= n

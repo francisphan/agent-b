@@ -52,8 +52,9 @@ def lookup_guest(email: str) -> dict:
 
     # Pardot — prospect by email
     try:
-        pardot_result = query_prospects({"fields": "id,email,firstName,lastName,createdAt",
-                                         "email": email_lower})
+        pardot_result = query_prospects(
+            {"fields": "id,email,firstName,lastName,createdAt", "email": email_lower}
+        )
         result["pardot"] = pardot_result
     except Exception as e:
         result["pardot"] = {"error": str(e)}
@@ -157,9 +158,12 @@ def guest_360(email: str) -> dict:
 
     # --- Pardot ---
     try:
-        pardot_result = query_prospects({"fields": "id,email,firstName,lastName,score,grade,"
-                                                    "createdAt,lastActivityAt",
-                                         "email": email_lower})
+        pardot_result = query_prospects(
+            {
+                "fields": "id,email,firstName,lastName,score,grade,createdAt,lastActivityAt",
+                "email": email_lower,
+            }
+        )
         values = pardot_result.get("values", [])
         if values:
             prospect = values[0]

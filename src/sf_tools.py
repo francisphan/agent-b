@@ -1,8 +1,13 @@
 """Salesforce MCP tool definitions."""
 
 from src.sf_client import (
-    get_record, query, query_page,
-    search, quick_search, get_limits, get_recent_items,
+    get_record,
+    query,
+    query_page,
+    search,
+    quick_search,
+    get_limits,
+    get_recent_items,
 )
 from src.sanitize import escape_soql
 from src.schema_cache import schema_cache
@@ -14,9 +19,7 @@ def register_tools(mcp):
     """Register all Salesforce tools on the given FastMCP instance."""
 
     @mcp.tool()
-    def sf_soql_query(
-        query_str: str = "", next_records_url: str = ""
-    ) -> list[dict] | dict:
+    def sf_soql_query(query_str: str = "", next_records_url: str = "") -> list[dict] | dict:
         """Execute a SOQL query against Salesforce and return matching records.
 
         Core objects: TVRS_Guest__c (guest reservations, external ID: Email__c),

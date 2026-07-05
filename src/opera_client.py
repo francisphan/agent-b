@@ -106,9 +106,24 @@ def _api_config() -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 _FORBIDDEN_KEYWORDS = (
-    "INSERT", "UPDATE", "DELETE", "MERGE", "DROP", "ALTER", "CREATE",
-    "TRUNCATE", "GRANT", "REVOKE", "EXECUTE", "CALL", "RENAME",
-    "BEGIN", "DECLARE", "COMMIT", "ROLLBACK", "SAVEPOINT",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "MERGE",
+    "DROP",
+    "ALTER",
+    "CREATE",
+    "TRUNCATE",
+    "GRANT",
+    "REVOKE",
+    "EXECUTE",
+    "CALL",
+    "RENAME",
+    "BEGIN",
+    "DECLARE",
+    "COMMIT",
+    "ROLLBACK",
+    "SAVEPOINT",
 )
 
 _LINE_COMMENT_RE = re.compile(r"--[^\n\r]*")
@@ -133,28 +148,23 @@ def assert_read_only(sql: str) -> None:
         raise ValueError("SQL contained only comments.")
 
     if ";" in cleaned:
-        raise ValueError(
-            "Multiple statements are not allowed — submit a single SELECT."
-        )
+        raise ValueError("Multiple statements are not allowed — submit a single SELECT.")
 
     upper = cleaned.upper()
     first_token = upper.split(None, 1)[0]
     if first_token not in ("SELECT", "WITH"):
-        raise ValueError(
-            f"Only SELECT/WITH queries are allowed (got: {first_token})."
-        )
+        raise ValueError(f"Only SELECT/WITH queries are allowed (got: {first_token}).")
 
     tokens = set(re.findall(r"\b[A-Z_]+\b", upper))
     forbidden = tokens & set(_FORBIDDEN_KEYWORDS)
     if forbidden:
-        raise ValueError(
-            f"Disallowed keyword(s) in query: {', '.join(sorted(forbidden))}"
-        )
+        raise ValueError(f"Disallowed keyword(s) in query: {', '.join(sorted(forbidden))}")
 
 
 # ---------------------------------------------------------------------------
 # Query execution (over HTTP to opera-pms-api)
 # ---------------------------------------------------------------------------
+
 
 def query(
     sql: str,
@@ -207,12 +217,15 @@ def query(
             logger.log(
                 logging.WARNING if will_retry else logging.ERROR,
                 "OPERA API request failed (attempt %d/%d)%s: %s | sql=%s | binds=%s",
-                attempt + 1, MAX_RETRIES,
+                attempt + 1,
+                MAX_RETRIES,
                 " — will retry" if will_retry else "",
-                e, _clip(sql), sorted(payload["binds"]),
+                e,
+                _clip(sql),
+                sorted(payload["binds"]),
             )
             if will_retry:
-                time.sleep(RETRY_BACKOFF * (2 ** attempt))
+                time.sleep(RETRY_BACKOFF * (2**attempt))
             continue
 
         # Read-only guard / malformed request — not retryable.
@@ -229,11 +242,14 @@ def query(
             logger.log(
                 logging.WARNING if will_retry else logging.ERROR,
                 "OPERA API %d (attempt %d/%d)%s | sql=%s",
-                resp.status_code, attempt + 1, MAX_RETRIES,
-                " — will retry" if will_retry else "", _clip(sql),
+                resp.status_code,
+                attempt + 1,
+                MAX_RETRIES,
+                " — will retry" if will_retry else "",
+                _clip(sql),
             )
             if will_retry:
-                time.sleep(RETRY_BACKOFF * (2 ** attempt))
+                time.sleep(RETRY_BACKOFF * (2**attempt))
             continue
         if not resp.ok:
             raise RuntimeError(f"OPERA API {resp.status_code}: {_clip(_error_message(resp))}")

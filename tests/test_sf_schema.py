@@ -9,7 +9,16 @@ class TestSchemaModule:
     """Tests for the sf_schema module directly."""
 
     def test_schema_has_expected_objects(self):
-        expected = {"TVRS_Guest__c", "Account", "Contact", "Opportunity", "Lead", "Campaign", "CampaignMember", "Task"}
+        expected = {
+            "TVRS_Guest__c",
+            "Account",
+            "Contact",
+            "Opportunity",
+            "Lead",
+            "Campaign",
+            "CampaignMember",
+            "Task",
+        }
         assert expected == set(SCHEMA.keys())
 
     def test_object_names_sorted(self):
@@ -54,10 +63,12 @@ class TestSfGetSchemaTool:
             def decorator(fn):
                 captured[fn.__name__] = fn
                 return fn
+
             return decorator
 
         mcp.tool = capture_tool
         from src.sf_tools import register_tools
+
         register_tools(mcp)
         return captured["sf_get_schema"]
 

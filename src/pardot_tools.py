@@ -84,7 +84,9 @@ DEFAULT_PROSPECT_FIELDS = (
     "id,email,firstName,lastName,company,jobTitle,city,state,country,"
     "phone,score,grade,source,campaignId,salesforceId,createdAt,updatedAt"
 )
-DEFAULT_LIST_FIELDS = "id,name,title,description,isPublic,isDynamic,folderId,campaignId,createdAt,updatedAt"
+DEFAULT_LIST_FIELDS = (
+    "id,name,title,description,isPublic,isDynamic,folderId,campaignId,createdAt,updatedAt"
+)
 DEFAULT_CAMPAIGN_FIELDS = "id,name,cost,folderId,salesforceId,createdAt,updatedAt"
 DEFAULT_FORM_FIELDS = "id,name,folderId,campaignId,trackerDomainId,createdAt,updatedAt"
 DEFAULT_EMAIL_TEMPLATE_FIELDS = (
@@ -97,8 +99,7 @@ DEFAULT_VISITOR_ACTIVITY_FIELDS = (
 )
 DEFAULT_LIST_MEMBERSHIP_FIELDS = "id,listId,prospectId,optedOut,createdAt,updatedAt"
 DEFAULT_EMAIL_FIELDS = (
-    "id,name,subject,campaignId,prospectId,emailTemplateId,"
-    "trackerDomainId,sentAt,type,listEmailId"
+    "id,name,subject,campaignId,prospectId,emailTemplateId,trackerDomainId,sentAt,type,listEmailId"
 )
 DEFAULT_LIST_EMAIL_FIELDS = (
     "id,name,subject,campaignId,emailTemplateId,isSent,sentAt,trackerDomainId,createdAt"
@@ -110,17 +111,14 @@ DEFAULT_TAG_FIELDS = "id,name,createdAt,updatedAt"
 DEFAULT_TAGGED_OBJECT_FIELDS = "id,tagId,objectType,objectId,createdAt"
 DEFAULT_TRACKER_DOMAIN_FIELDS = "id,domain,isPrimary,isDeleted"
 DEFAULT_ENGAGEMENT_STUDIO_PROGRAM_FIELDS = (
-    "id,name,status,recipientListId,senderType,senderId,"
-    "folderId,campaignId,createdAt,updatedAt"
+    "id,name,status,recipientListId,senderType,senderId,folderId,campaignId,createdAt,updatedAt"
 )
 DEFAULT_VISITOR_FIELDS = "id,pageViewCount,prospectId,createdAt,updatedAt"
 DEFAULT_VISIT_FIELDS = (
-    "id,visitorId,prospectId,visitorPageViewCount,"
-    "durationInSeconds,campaignId,createdAt"
+    "id,visitorId,prospectId,visitorPageViewCount,durationInSeconds,campaignId,createdAt"
 )
 DEFAULT_PROSPECT_ACCOUNT_FIELDS = (
-    "id,name,city,state,country,phone,website,"
-    "annualRevenue,employeeCount,createdAt,updatedAt"
+    "id,name,city,state,country,phone,website,annualRevenue,employeeCount,createdAt,updatedAt"
 )
 DEFAULT_OPPORTUNITY_FIELDS = (
     "id,name,value,probability,type,status,closedAt,campaignId,createdAt,updatedAt"
@@ -136,15 +134,13 @@ DEFAULT_FOLDER_CONTENT_FIELDS = "id,folderId,objectType,objectId"
 DEFAULT_CUSTOM_REDIRECT_FIELDS = (
     "id,name,url,destinationUrl,campaignId,trackerDomainId,folderId,createdAt,updatedAt"
 )
-DEFAULT_FORM_HANDLER_FIELDS = (
-    "id,name,url,campaignId,trackerDomainId,folderId,createdAt,updatedAt"
+DEFAULT_FORM_HANDLER_FIELDS = "id,name,url,campaignId,trackerDomainId,folderId,createdAt,updatedAt"
+DEFAULT_FORM_HANDLER_FIELD_FIELDS = (
+    "id,formHandlerId,prospectFieldId,fieldName,isRequired,dataFormat,createdAt,updatedAt"
 )
-DEFAULT_FORM_HANDLER_FIELD_FIELDS = "id,formHandlerId,prospectFieldId,fieldName,isRequired,dataFormat,createdAt,updatedAt"
 DEFAULT_LAYOUT_TEMPLATE_FIELDS = "id,name,folderId,createdAt,updatedAt"
 DEFAULT_FILE_FIELDS = "id,name,folderId,url,size,createdAt,updatedAt"
-DEFAULT_LANDING_PAGE_FIELDS = (
-    "id,name,url,campaignId,trackerDomainId,folderId,createdAt,updatedAt"
-)
+DEFAULT_LANDING_PAGE_FIELDS = "id,name,url,campaignId,trackerDomainId,folderId,createdAt,updatedAt"
 DEFAULT_DYNAMIC_CONTENT_FIELDS = "id,name,basedOn,folderId,createdAt,updatedAt"
 DEFAULT_DYNAMIC_CONTENT_VARIATION_FIELDS = (
     "id,dynamicContentId,comparison,value,content,createdAt,updatedAt"
@@ -415,9 +411,7 @@ def register_tools(mcp, include=None):
             return {"error": str(e)}
 
     @mcp.tool()
-    def pardot_query_forms(
-        fields: str = "", limit: int = 200, id_greater_than: str = ""
-    ) -> dict:
+    def pardot_query_forms(fields: str = "", limit: int = 200, id_greater_than: str = "") -> dict:
         """Query Pardot forms.
 
         Args:
@@ -529,18 +523,14 @@ def register_tools(mcp, include=None):
             The membership as a dict, or an error dict on failure.
         """
         try:
-            return get_list_membership(
-                membership_id, fields=DEFAULT_LIST_MEMBERSHIP_FIELDS
-            )
+            return get_list_membership(membership_id, fields=DEFAULT_LIST_MEMBERSHIP_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 
     # --- Email Read ---
 
     @mcp.tool()
-    def pardot_query_emails(
-        fields: str = "", limit: int = 200, id_greater_than: str = ""
-    ) -> dict:
+    def pardot_query_emails(fields: str = "", limit: int = 200, id_greater_than: str = "") -> dict:
         """Query Pardot emails (one-to-one sends).
 
         Args:
@@ -736,9 +726,7 @@ def register_tools(mcp, include=None):
             The tagged object as a dict, or an error dict on failure.
         """
         try:
-            return get_tagged_object(
-                tagged_object_id, fields=DEFAULT_TAGGED_OBJECT_FIELDS
-            )
+            return get_tagged_object(tagged_object_id, fields=DEFAULT_TAGGED_OBJECT_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 
@@ -824,9 +812,7 @@ def register_tools(mcp, include=None):
             The visitor activity as a dict, or an error dict on failure.
         """
         try:
-            return get_visitor_activity(
-                activity_id, fields=DEFAULT_VISITOR_ACTIVITY_FIELDS
-            )
+            return get_visitor_activity(activity_id, fields=DEFAULT_VISITOR_ACTIVITY_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 
@@ -908,9 +894,7 @@ def register_tools(mcp, include=None):
     # --- Visits ---
 
     @mcp.tool()
-    def pardot_query_visits(
-        fields: str = "", limit: int = 200, id_greater_than: str = ""
-    ) -> dict:
+    def pardot_query_visits(fields: str = "", limit: int = 200, id_greater_than: str = "") -> dict:
         """Query Pardot visits (individual website sessions).
 
         Args:
@@ -983,9 +967,7 @@ def register_tools(mcp, include=None):
             The prospect account as a dict, or an error dict on failure.
         """
         try:
-            return get_prospect_account(
-                account_id, fields=DEFAULT_PROSPECT_ACCOUNT_FIELDS
-            )
+            return get_prospect_account(account_id, fields=DEFAULT_PROSPECT_ACCOUNT_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 
@@ -1108,18 +1090,14 @@ def register_tools(mcp, include=None):
             The lifecycle history as a dict, or an error dict on failure.
         """
         try:
-            return get_lifecycle_history(
-                history_id, fields=DEFAULT_LIFECYCLE_HISTORY_FIELDS
-            )
+            return get_lifecycle_history(history_id, fields=DEFAULT_LIFECYCLE_HISTORY_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 
     # --- Users ---
 
     @mcp.tool()
-    def pardot_query_users(
-        fields: str = "", limit: int = 200, id_greater_than: str = ""
-    ) -> dict:
+    def pardot_query_users(fields: str = "", limit: int = 200, id_greater_than: str = "") -> dict:
         """Query Pardot users.
 
         Args:
@@ -1279,9 +1257,7 @@ def register_tools(mcp, include=None):
             The custom redirect as a dict, or an error dict on failure.
         """
         try:
-            return get_custom_redirect(
-                redirect_id, fields=DEFAULT_CUSTOM_REDIRECT_FIELDS
-            )
+            return get_custom_redirect(redirect_id, fields=DEFAULT_CUSTOM_REDIRECT_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 
@@ -1365,9 +1341,7 @@ def register_tools(mcp, include=None):
             The form handler field as a dict, or an error dict on failure.
         """
         try:
-            return get_form_handler_field(
-                field_id, fields=DEFAULT_FORM_HANDLER_FIELD_FIELDS
-            )
+            return get_form_handler_field(field_id, fields=DEFAULT_FORM_HANDLER_FIELD_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 
@@ -1408,18 +1382,14 @@ def register_tools(mcp, include=None):
             The layout template as a dict, or an error dict on failure.
         """
         try:
-            return get_layout_template(
-                template_id, fields=DEFAULT_LAYOUT_TEMPLATE_FIELDS
-            )
+            return get_layout_template(template_id, fields=DEFAULT_LAYOUT_TEMPLATE_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 
     # --- Files ---
 
     @mcp.tool()
-    def pardot_query_files(
-        fields: str = "", limit: int = 200, id_greater_than: str = ""
-    ) -> dict:
+    def pardot_query_files(fields: str = "", limit: int = 200, id_greater_than: str = "") -> dict:
         """Query Pardot files (uploaded assets).
 
         Args:
@@ -1533,9 +1503,7 @@ def register_tools(mcp, include=None):
             The dynamic content as a dict, or an error dict on failure.
         """
         try:
-            return get_dynamic_content(
-                content_id, fields=DEFAULT_DYNAMIC_CONTENT_FIELDS
-            )
+            return get_dynamic_content(content_id, fields=DEFAULT_DYNAMIC_CONTENT_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 
@@ -1666,9 +1634,7 @@ def register_tools(mcp, include=None):
             The external activity as a dict, or an error dict on failure.
         """
         try:
-            return get_external_activity(
-                activity_id, fields=DEFAULT_EXTERNAL_ACTIVITY_FIELDS
-            )
+            return get_external_activity(activity_id, fields=DEFAULT_EXTERNAL_ACTIVITY_FIELDS)
         except Exception as e:
             return {"error": str(e)}
 

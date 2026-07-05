@@ -141,9 +141,7 @@ class TestPardotEnabledUnrecognised:
         with caplog.at_level("WARNING", logger="src.pardot_client"):
             assert pardot_enabled() is True
         assert any(
-            r.levelname == "WARNING"
-            and "fasle" in r.getMessage()
-            and "ENABLED" in r.getMessage()
+            r.levelname == "WARNING" and "fasle" in r.getMessage() and "ENABLED" in r.getMessage()
             for r in caplog.records
         )
 
@@ -284,12 +282,16 @@ class TestWithRetry:
 class TestGetHelper:
     @patch("src.pardot_client._with_retry")
     def test_get_calls_correct_url(self, mock_retry, mock_env, mock_sf):
-        mock_retry.side_effect = lambda func: func(MagicMock(
-            get=MagicMock(return_value=MagicMock(
-                raise_for_status=MagicMock(),
-                json=MagicMock(return_value={"values": []}),
-            ))
-        ))
+        mock_retry.side_effect = lambda func: func(
+            MagicMock(
+                get=MagicMock(
+                    return_value=MagicMock(
+                        raise_for_status=MagicMock(),
+                        json=MagicMock(return_value={"values": []}),
+                    )
+                )
+            )
+        )
         result = _get("prospects", params={"limit": 10})
         assert result == {"values": []}
 
@@ -336,9 +338,7 @@ class TestGetErrorMessage:
 
     @patch("src.pardot_client._refresh_session")
     @patch("src.pardot_client.time.sleep")
-    def test_get_still_reauths_on_401(
-        self, mock_sleep, mock_refresh, mock_env, mock_sf
-    ):
+    def test_get_still_reauths_on_401(self, mock_sleep, mock_refresh, mock_env, mock_sf):
         # Body enrichment must not swallow response=, or the read path loses its
         # 401 re-auth. First GET 401, second GET succeeds after re-auth.
         resp_401 = MagicMock()
@@ -490,9 +490,7 @@ class TestWriteFunctions:
     def test_update_prospect(self, mock_patch):
         mock_patch.return_value = {"id": "100", "firstName": "Updated"}
         result = update_prospect("100", {"firstName": "Updated"})
-        mock_patch.assert_called_once_with(
-            "prospects/100", {"firstName": "Updated"}
-        )
+        mock_patch.assert_called_once_with("prospects/100", {"firstName": "Updated"})
         assert result["firstName"] == "Updated"
 
 
@@ -532,9 +530,7 @@ class TestNoRetryOn4xx:
 
 class TestErrorLogging:
     @patch("src.pardot_client.time.sleep")
-    def test_400_logs_url_and_body_at_error(
-        self, mock_sleep, mock_env, mock_sf, caplog
-    ):
+    def test_400_logs_url_and_body_at_error(self, mock_sleep, mock_env, mock_sf, caplog):
         response_400 = Mock()
         response_400.status_code = 400
         response_400.url = "https://pi.pardot.com/api/v5/objects/prospects/999"
@@ -592,9 +588,7 @@ class TestGetErrorClipAndPersistent401:
         assert "(+100 chars)" in str(exc_info.value)  # 600 - 500, marked
 
     @patch("src.pardot_client._refresh_session")
-    def test_persistent_401_raises_http_error_not_typeerror(
-        self, mock_refresh, mock_env, mock_sf
-    ):
+    def test_persistent_401_raises_http_error_not_typeerror(self, mock_refresh, mock_env, mock_sf):
         # If re-auth never fixes the 401, the retry loop must raise the real
         # HTTPError (carrying "Invalid scope" etc.), not TypeError(None).
         resp = MagicMock()

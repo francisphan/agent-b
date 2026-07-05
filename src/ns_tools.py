@@ -15,9 +15,7 @@ def register_tools(mcp):
     """Register all NetSuite tools on the given FastMCP instance."""
 
     @mcp.tool()
-    def ns_suiteql_query(
-        query: str, limit: int = 1000, offset: int = 0
-    ) -> list[dict] | dict:
+    def ns_suiteql_query(query: str, limit: int = 1000, offset: int = 0) -> list[dict] | dict:
         """Execute a SuiteQL query against NetSuite and return matching records.
 
         Key tables: customer, transaction (filter by type: SalesOrd, CustInvc, etc.),
@@ -88,9 +86,7 @@ def register_tools(mcp):
             return [{"error": enhanced}]
 
     @mcp.tool()
-    def ns_rest_get(
-        record_type: str, record_id: str, expand_sub_resources: bool = False
-    ) -> dict:
+    def ns_rest_get(record_type: str, record_id: str, expand_sub_resources: bool = False) -> dict:
         """Get a single NetSuite record by its type and internal ID.
 
         Args:
@@ -102,9 +98,7 @@ def register_tools(mcp):
             The record as a dict, or an error dict on failure.
         """
         try:
-            return rest_get(
-                record_type, record_id, expand_sub_resources=expand_sub_resources
-            )
+            return rest_get(record_type, record_id, expand_sub_resources=expand_sub_resources)
         except Exception as e:
             return {"error": str(e)}
 
