@@ -171,16 +171,17 @@ register_sf_write_tools(mcp)
 register_ns_write_tools(mcp)
 register_opportunity_tools(mcp)
 
-# Pardot: pardot_enabled() (default ON) is the single on/off gate — shared with
-# pardot_client, which checks the same helper per-call so the cross-system
-# composites (guest_360_profile, lookup_guest_by_email, person_brief,
-# wine_owner_lookup) short-circuit at the client when Pardot is off. When on, an
-# explicit truthy PARDOT_TOOLS_ENABLED lights up the full read+write surface;
-# unset keeps only the curated read subset (the lean default the Sabueso bot
-# uses — the rest was built for pv-campaign-2026 and stays parked in code). Set
-# PARDOT_TOOLS_ENABLED=false to switch Pardot off entirely: skips these tools AND
-# no-ops the composites' Pardot leg.
-from src.pardot_client import pardot_enabled  # noqa: E402
+# Pardot: pardot_enabled() (default ON) is the single on/off gate, shared with
+# pardot_client so the cross-system composites short-circuit at the client when
+# Pardot is off (guest_360_profile / lookup_guest_by_email hit Pardot via
+# cross_tools' query_prospects leg; person_brief / wine_owner_lookup reach it
+# transitively through guest_360). When enabled, pardot_full_surface() decides
+# breadth: an explicit truthy PARDOT_TOOLS_ENABLED lights up the full read+write
+# surface, while unset keeps only the curated read subset (the lean default the
+# Sabueso bot uses — the rest was built for pv-campaign-2026 and stays parked in
+# code). Set PARDOT_TOOLS_ENABLED=false to switch Pardot off entirely: registers
+# ZERO Pardot tools AND no-ops the composites' Pardot leg.
+from src.pardot_client import pardot_enabled, pardot_full_surface  # noqa: E402
 from src.pardot_tools import (  # noqa: E402
     CURATED_READ_TOOLS as PARDOT_CURATED_READ_TOOLS,
     register_tools as register_pardot_tools,
@@ -188,7 +189,7 @@ from src.pardot_tools import (  # noqa: E402
 
 if not pardot_enabled():
     logger.info("Pardot MCP tools: disabled (PARDOT_TOOLS_ENABLED is off)")
-elif os.getenv("PARDOT_TOOLS_ENABLED", "").strip().lower() in ("1", "true", "yes"):
+elif pardot_full_surface():
     from src.pardot_write_tools import (  # noqa: E402
         register_tools as register_pardot_write_tools,
     )

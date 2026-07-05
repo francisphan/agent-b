@@ -35,9 +35,16 @@ def _reload_server(monkeypatch, value):
 
 @pytest.fixture(autouse=True)
 def _restore_server():
-    """Leave src.server reloaded in its default (flag-unset) state for later tests."""
+    """Snapshot PARDOT_TOOLS_ENABLED and restore it EXACTLY after each test, then
+    reload src.server so it reflects the restored env — otherwise a value exported
+    in the real dev/CI environment would be clobbered for the rest of the session
+    and src.server left reloaded in the wrong state."""
+    original = os.environ.get("PARDOT_TOOLS_ENABLED")
     yield
-    os.environ.pop("PARDOT_TOOLS_ENABLED", None)
+    if original is None:
+        os.environ.pop("PARDOT_TOOLS_ENABLED", None)
+    else:
+        os.environ["PARDOT_TOOLS_ENABLED"] = original
     import src.server as server_mod
 
     importlib.reload(server_mod)

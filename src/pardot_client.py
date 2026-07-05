@@ -88,28 +88,67 @@ def _validate_endpoint(endpoint: str) -> str:
     return endpoint
 
 
+# Recognized on/off spellings for PARDOT_TOOLS_ENABLED. Any other NON-EMPTY value
+# is treated as a likely typo: pardot_enabled() fails open (stays ON) but warns.
+_TRUTHY_FLAG_VALUES = ("1", "true", "yes", "on")
+_FALSY_FLAG_VALUES = ("0", "false", "no", "off")
+# The full-surface opt-in is intentionally stricter than the on/off gate — it
+# keeps the exact pre-flag spellings so behaviour is unchanged (so e.g. "on"
+# means enabled-but-curated, never enabled-with-writes).
+_FULL_SURFACE_FLAG_VALUES = ("1", "true", "yes")
+
+# Unrecognized flag values we've already warned about — so a misconfiguration is
+# surfaced ONCE, not on every per-call gate check (this gate exists to cut log
+# noise, not add it).
+_warned_flag_values: set[str] = set()
+
+
 def pardot_enabled() -> bool:
     """Whether Pardot access is switched on (the PARDOT_TOOLS_ENABLED env flag).
 
-    The single definition of the gate, so one flag governs every path: server.py
-    checks it at registration time for the pardot_* tools, and _with_retry()
-    checks it per-call for the cross-system composites (guest_360_profile,
-    lookup_guest_by_email, person_brief, wine_owner_lookup) — which call
-    pardot_client directly and bypass tool registration. When off, _with_retry()
-    short-circuits before any auth/HTTP work, so those composites' try/except
-    degrades gracefully, and instantly.
+    The single definition of the on/off gate, so one flag governs every path:
+    server.py checks it at registration time for the pardot_* tools, and
+    _with_retry() checks it per-call for the cross-system composites, which bypass
+    tool registration by reaching pardot_client themselves — guest_360_profile and
+    lookup_guest_by_email hit Pardot via cross_tools' query_prospects leg, while
+    person_brief and wine_owner_lookup reach it transitively through guest_360.
+    When off, _with_retry() short-circuits before any auth/HTTP work, so those
+    composites' try/except degrades gracefully, and instantly.
 
-    Defaults to ENABLED when unset: production has never set this flag, so leaving
-    it unset keeps today's behaviour. Only an explicit false-y value
-    (false/0/no/off) turns Pardot off — the mirror image of OPERA, whose gate is
-    off by default.
+    Defaults to ENABLED when unset or empty: production has never set this flag,
+    so leaving it unset keeps today's behaviour. Only an explicit false-y value
+    (0/false/no/off) turns Pardot off — the mirror image of OPERA, whose gate is
+    off by default. A non-empty but UNRECOGNIZED value (e.g. a typo like "fasle")
+    fails open — stays ENABLED — and logs a one-time WARNING so the mistake is
+    visible instead of silently flipping the gate.
     """
-    return os.environ.get("PARDOT_TOOLS_ENABLED", "").strip().lower() not in (
-        "0",
-        "false",
-        "no",
-        "off",
-    )
+    raw = os.environ.get("PARDOT_TOOLS_ENABLED", "").strip().lower()
+    if raw in _FALSY_FLAG_VALUES:
+        return False
+    if raw == "" or raw in _TRUTHY_FLAG_VALUES:
+        return True
+    if raw not in _warned_flag_values:
+        _warned_flag_values.add(raw)
+        logger.warning(
+            "PARDOT_TOOLS_ENABLED=%r is not a recognized on/off value; treating "
+            "Pardot as ENABLED. Use one of %s (on) or %s (off) to be explicit.",
+            raw,
+            "/".join(_TRUTHY_FLAG_VALUES),
+            "/".join(_FALSY_FLAG_VALUES),
+        )
+    return True
+
+
+def pardot_full_surface() -> bool:
+    """Whether to register the FULL Pardot tool surface (all reads + writes) as
+    opposed to the curated read subset — a distinct axis from pardot_enabled()'s
+    on/off gate, and only meaningful when Pardot is enabled. An explicit truthy
+    PARDOT_TOOLS_ENABLED opts into the full surface; unset (the prod default)
+    keeps the lean curated subset the Sabueso bot uses. Deliberately stricter than
+    the on/off gate so the pre-flag full-vs-curated behaviour is unchanged.
+    """
+    raw = os.environ.get("PARDOT_TOOLS_ENABLED", "").strip().lower()
+    return raw in _FULL_SURFACE_FLAG_VALUES
 
 
 def _get_business_unit_id() -> str:
