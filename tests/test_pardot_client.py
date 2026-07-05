@@ -178,6 +178,69 @@ class TestGetHelper:
         assert result == {"values": []}
 
 
+class TestGetErrorMessage:
+    """_get must surface the response body in the raised error's message.
+
+    Tools return {"error": str(e)}, so a bare requests HTTPError line (no body)
+    hid Pardot's real complaint (e.g. code-184 "Invalid scope") from callers.
+    """
+
+    @patch("src.pardot_client._with_retry")
+    def test_get_error_body_in_message(self, mock_retry, mock_env, mock_sf):
+        resp = MagicMock()
+        resp.ok = False
+        resp.status_code = 400
+        resp.reason = "Bad Request"
+        resp.text = '{"code": 184, "message": "Invalid scope"}'
+        session = MagicMock()
+        session.get.return_value = resp
+        mock_retry.side_effect = lambda func: func(session)
+
+        with pytest.raises(requests.exceptions.HTTPError) as exc_info:
+            _get("prospects")
+        msg = str(exc_info.value)
+        assert "400 Bad Request" in msg
+        assert "Invalid scope" in msg  # Pardot's actual error body
+        # response stays attached so _with_retry can still branch on status.
+        assert exc_info.value.response is resp
+
+    @patch("src.pardot_client._with_retry")
+    def test_get_error_empty_body(self, mock_retry, mock_env, mock_sf):
+        resp = MagicMock()
+        resp.ok = False
+        resp.status_code = 500
+        resp.reason = "Server Error"
+        resp.text = ""
+        session = MagicMock()
+        session.get.return_value = resp
+        mock_retry.side_effect = lambda func: func(session)
+
+        with pytest.raises(requests.exceptions.HTTPError, match="500 Server Error"):
+            _get("prospects")
+
+    @patch("src.pardot_client._refresh_session")
+    @patch("src.pardot_client.time.sleep")
+    def test_get_still_reauths_on_401(
+        self, mock_sleep, mock_refresh, mock_env, mock_sf
+    ):
+        # Body enrichment must not swallow response=, or the read path loses its
+        # 401 re-auth. First GET 401, second GET succeeds after re-auth.
+        resp_401 = MagicMock()
+        resp_401.ok = False
+        resp_401.status_code = 401
+        resp_401.reason = "Unauthorized"
+        resp_401.text = "session expired"
+        resp_ok = MagicMock()
+        resp_ok.ok = True
+        resp_ok.json.return_value = {"values": []}
+
+        session = get_session()
+        session.get = MagicMock(side_effect=[resp_401, resp_ok])
+
+        assert _get("prospects") == {"values": []}
+        mock_refresh.assert_called_once()
+
+
 # --- Query / Get functions ---
 
 

@@ -162,7 +162,15 @@ def _get(endpoint: str, params: dict | None = None) -> dict | list:
 
     def _do(session):
         resp = session.get(f"{BASE_URL}/{endpoint}", params=params)
-        resp.raise_for_status()
+        if not resp.ok:
+            # Embed the response body in the message so the caller sees Pardot's
+            # actual complaint (e.g. "Invalid scope"), not a bare HTTP line.
+            # Keep response= attached so _with_retry still re-auths on 401 and
+            # skips retrying other 4xx.
+            error_body = resp.text[:2000] if resp.text else "(empty)"
+            raise requests.exceptions.HTTPError(
+                f"{resp.status_code} {resp.reason}: {error_body}", response=resp
+            )
         return resp.json()
 
     return _with_retry(_do)

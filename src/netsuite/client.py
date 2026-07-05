@@ -30,12 +30,17 @@ _IDEMPOTENT_METHODS = {"GET", "HEAD", "OPTIONS"}
 # and may carry PII, so we never log an unbounded body.
 _MAX_LOG_BODY = 2000
 
+# Cap how much NetSuite error detail we fold into the exception message. The full
+# body is still logged; this keeps the string a tool caller (e.g. an LLM agent)
+# sees actionable without dumping an unbounded payload into it.
+_MAX_ERROR_DETAIL = 500
 
-def _clip(value: Any) -> str:
-    """Render a body for logging, truncated to a safe length."""
+
+def _clip(value: Any, limit: int = _MAX_LOG_BODY) -> str:
+    """Render a body for logging or messaging, truncated to a safe length."""
     text = value if isinstance(value, str) else str(value)
-    if len(text) > _MAX_LOG_BODY:
-        return f"{text[:_MAX_LOG_BODY]}… (+{len(text) - _MAX_LOG_BODY} chars)"
+    if len(text) > limit:
+        return f"{text[:limit]}… (+{len(text) - limit} chars)"
     return text
 
 
@@ -181,10 +186,16 @@ class NetSuiteClient:
             body = response.json()
             error_resp = NetSuiteErrorResponse.model_validate(body)
         except Exception:
-            return NetSuiteError(
-                f"HTTP {response.status_code}",
-                status=response.status_code,
-            )
+            # No parseable JSON body: still surface whatever NetSuite returned
+            # (clipped) so the caller isn't left with a bare status code.
+            message = f"HTTP {response.status_code}"
+            try:
+                text = response.text.strip()
+            except Exception:  # pragma: no cover - response body not readable
+                text = ""
+            if text:
+                message = f"{message}: {_clip(text, _MAX_ERROR_DETAIL)}"
+            return NetSuiteError(message, status=response.status_code)
 
         exc_class = STATUS_EXCEPTION_MAP.get(response.status_code, NetSuiteError)
         kwargs: dict[str, Any] = {
@@ -194,9 +205,19 @@ class NetSuiteClient:
         }
         if exc_class is ConcurrencyLimitError:
             kwargs["retry_after"] = parse_retry_after(response)
-        return exc_class(
-            error_resp.title or f"HTTP {response.status_code}", **kwargs
+
+        # Fold NetSuite's o:errorDetails[].detail into the message. Without it the
+        # caller only sees the generic title (e.g. "Bad Request") and can't tell a
+        # SQL syntax error from a bad field name. error_details stays on the
+        # exception for programmatic use.
+        prefix = error_resp.title or f"HTTP {response.status_code}"
+        details = "; ".join(
+            d.detail.strip() for d in error_resp.error_details if d.detail.strip()
         )
+        message = (
+            f"{prefix}: {_clip(details, _MAX_ERROR_DETAIL)}" if details else prefix
+        )
+        return exc_class(message, **kwargs)
 
     def close(self) -> None:
         if self._sync_client and not self._sync_client.is_closed:
