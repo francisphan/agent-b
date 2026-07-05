@@ -245,7 +245,7 @@ def schema_cache_invalidate(key: str = "") -> dict:
 # Resources — browsable context for AI clients
 # ---------------------------------------------------------------------------
 from src.sf_schema import SCHEMA as SF_SCHEMA  # noqa: E402
-from src.ns_schema import SCHEMA as NS_SCHEMA  # noqa: E402
+from src.ns_schema import SCHEMA as NS_SCHEMA, GLOBAL_TIPS as NS_TIPS  # noqa: E402
 from src.opera_schema import SCHEMA as OPERA_SCHEMA, GLOBAL_TIPS as OPERA_TIPS  # noqa: E402
 
 
@@ -318,12 +318,10 @@ def query_patterns_resource() -> str:
         ],
         "suiteql_tips": [
             "Use ns_get_netsuite_schema before writing SuiteQL to discover table/field names",
-            "All transactions live in 'transaction' table — filter by type column",
-            "Transaction type codes: SalesOrd, CustInvc, CustPymt, VendBill, PurchOrd, Journal",
+            # Cross-table gotchas (LIMIT/FETCH FIRST, id, balancesearch, T/F, dates)
+            # come from the single source in ns_schema.GLOBAL_TIPS, like OPERA_TIPS below.
+            *NS_TIPS,
             "Line items: JOIN transactionline tl ON t.id = tl.transaction",
-            "Customer booleans: use 'T'/'F' strings, not true/false",
-            "Date functions: TO_DATE('2025-01-01', 'YYYY-MM-DD'), SYSDATE",
-            "Case-sensitive string compare — use LOWER() for case-insensitive matching",
         ],
         "cross_system": [
             "Use lookup_guest_by_email for quick cross-system existence checks",

@@ -75,6 +75,67 @@ class TestValidateSuiteql:
         assert result["valid"] is True
         assert result["warnings"] == []
 
+    def test_limit_keyword_rejected(self):
+        # The exact production failure: an LLM appended a MySQL-style LIMIT clause.
+        result = validate_suiteql(
+            "SELECT t.id FROM transaction t WHERE t.type = 'SalesOrd' "
+            "ORDER BY t.trandate DESC LIMIT 50"
+        )
+        assert result["valid"] is False
+        assert result["blocking"] is True
+        assert any("LIMIT" in w for w in result["warnings"])
+        assert any("FETCH FIRST" in s for s in result["suggestions"])
+
+    def test_limit_keyword_case_insensitive(self):
+        result = validate_suiteql("select id from customer limit 10")
+        assert result["valid"] is False
+        assert result["blocking"] is True
+
+    def test_limit_inside_string_literal_not_flagged(self):
+        # Data can legitimately contain 'LIMIT <n>' — literals are scrubbed first.
+        result = validate_suiteql(
+            "SELECT id FROM customer WHERE comments LIKE '%LIMIT 50 per order%'"
+        )
+        assert result["valid"] is True
+        assert result["blocking"] is False
+        assert result["warnings"] == []
+
+    def test_limit_in_escaped_literal_not_flagged(self):
+        # SuiteQL escapes a quote by doubling it; the scrubber must not desync.
+        result = validate_suiteql(
+            "SELECT id FROM customer WHERE companyname = 'O''Brien LIMIT 10 LLC'"
+        )
+        assert result["valid"] is True
+        assert result["blocking"] is False
+
+    def test_unparseable_from_is_not_blocking(self):
+        # Pre-existing advisory path: the naive extractor may miss valid FROM
+        # sources (e.g. quoted identifiers). It must never block execution.
+        result = validate_suiteql('SELECT COUNT(*) FROM "customer"')
+        assert result["valid"] is False
+        assert result["blocking"] is False
+
+    def test_column_named_limits_not_flagged(self):
+        # 'limits' shares a prefix with LIMIT but is a distinct identifier.
+        result = validate_suiteql("SELECT id, limits FROM customer")
+        assert result["valid"] is True
+        assert result["warnings"] == []
+
+    def test_credit_limit_column_not_flagged(self):
+        # A LIMIT not followed by a bare number (here followed by FROM) is not a clause.
+        result = validate_suiteql("SELECT credit_limit FROM customer")
+        assert result["valid"] is True
+        assert result["warnings"] == []
+
+    def test_fetch_first_passes(self):
+        # The correct SuiteQL row-limiting idiom must not be flagged.
+        result = validate_suiteql(
+            "SELECT id, companyname FROM customer "
+            "ORDER BY lastmodifieddate DESC FETCH FIRST 25 ROWS ONLY"
+        )
+        assert result["valid"] is True
+        assert result["warnings"] == []
+
 
 class TestEnhanceSfError:
     def test_no_such_column_suggests_fix(self):
