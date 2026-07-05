@@ -142,3 +142,42 @@ class TestGuest360:
         assert any("Salesforce" in e for e in profile["_errors"])
         # Other sections should still be populated
         assert profile["netsuite" if "netsuite" in profile else "financials"] is not None
+
+
+class TestPardotDisabled:
+    """With PARDOT_TOOLS_ENABLED off, the composites' Pardot leg short-circuits at
+    the client (no HTTP/auth) and the composites degrade gracefully. Here the real
+    query_prospects runs — only Salesforce/NetSuite are mocked — so the client-level
+    guard is exercised end-to-end through the composite."""
+
+    @patch("src.cross_tools.suiteql_query")
+    @patch("src.cross_tools.sf_query")
+    def test_guest_360_notes_pardot_disabled(self, mock_sf, mock_ns, monkeypatch):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "false")
+        mock_sf.return_value = []
+        mock_ns.return_value = []
+
+        from src.cross_tools import guest_360
+        profile = guest_360("test@example.com")
+
+        assert "_errors" in profile
+        assert any("Pardot" in e and "disabled" in e for e in profile["_errors"])
+        # The rest of the profile is still returned intact.
+        assert profile["email"] == "test@example.com"
+        assert "marketing" in profile
+
+    @patch("src.cross_tools.suiteql_query")
+    @patch("src.cross_tools.sf_query")
+    def test_lookup_guest_reports_pardot_disabled(self, mock_sf, mock_ns, monkeypatch):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "false")
+        mock_sf.return_value = []
+        mock_ns.return_value = []
+
+        from src.cross_tools import lookup_guest
+        result = lookup_guest("test@example.com")
+
+        assert "error" in result["pardot"]
+        assert "disabled" in result["pardot"]["error"]
+        # Other systems are unaffected.
+        assert result["salesforce"] is not None
+        assert result["netsuite"] is not None

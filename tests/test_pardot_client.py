@@ -23,6 +23,8 @@ from src.pardot_client import (
     get_list,
     get_prospect,
     get_session,
+    pardot_enabled,
+    pardot_full_surface,
     query_campaigns,
     query_email_templates,
     query_forms,
@@ -94,6 +96,120 @@ class TestRefreshSession:
 
         assert old_session is not new_session
         mock_reconnect.assert_called_once()
+
+
+# --- pardot_enabled() gate ---
+
+
+class TestPardotEnabled:
+    """The PARDOT_TOOLS_ENABLED gate — default ON, off only when explicitly false-y."""
+
+    def test_enabled_when_unset(self, monkeypatch):
+        monkeypatch.delenv("PARDOT_TOOLS_ENABLED", raising=False)
+        assert pardot_enabled() is True
+
+    def test_enabled_when_empty(self, monkeypatch):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "")
+        assert pardot_enabled() is True
+
+    @pytest.mark.parametrize("val", ["true", "1", "yes", "TRUE", " Yes ", "on", "garbage"])
+    def test_enabled_for_truthy_or_unrecognised(self, monkeypatch, val):
+        # Only explicit off values disable; anything else (incl. unknown) stays on.
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", val)
+        assert pardot_enabled() is True
+
+    @pytest.mark.parametrize("val", ["false", "0", "no", "off", "FALSE", " No "])
+    def test_disabled_for_falsey(self, monkeypatch, val):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", val)
+        assert pardot_enabled() is False
+
+
+class TestPardotEnabledUnrecognised:
+    """A non-empty but unrecognized flag value fails OPEN (stays enabled) and warns
+    once, instead of silently flipping the gate on a typo."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_warn_cache(self):
+        from src.pardot_client import _warned_flag_values
+
+        _warned_flag_values.clear()
+        yield
+        _warned_flag_values.clear()
+
+    def test_unrecognised_stays_enabled_and_warns(self, monkeypatch, caplog):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "fasle")  # typo of "false"
+        with caplog.at_level("WARNING", logger="src.pardot_client"):
+            assert pardot_enabled() is True
+        assert any(
+            r.levelname == "WARNING"
+            and "fasle" in r.getMessage()
+            and "ENABLED" in r.getMessage()
+            for r in caplog.records
+        )
+
+    def test_unrecognised_warns_only_once(self, monkeypatch, caplog):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "maybe")
+        with caplog.at_level("WARNING", logger="src.pardot_client"):
+            assert pardot_enabled() is True
+            assert pardot_enabled() is True
+            assert pardot_enabled() is True
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1  # deduped — not one per per-call gate check
+
+    def test_recognised_values_never_warn(self, monkeypatch, caplog):
+        with caplog.at_level("WARNING", logger="src.pardot_client"):
+            for val in ("on", "true", "1", "yes", "off", "no", "0", "false"):
+                monkeypatch.setenv("PARDOT_TOOLS_ENABLED", val)
+                pardot_enabled()
+            monkeypatch.delenv("PARDOT_TOOLS_ENABLED", raising=False)
+            pardot_enabled()  # unset
+        assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+# --- pardot_full_surface() (full reads+writes vs curated read subset) ---
+
+
+class TestPardotFullSurface:
+    """Distinct axis from the on/off gate, deliberately stricter: only an explicit
+    truthy value opts into the full surface, preserving pre-flag behaviour (unset =
+    curated, and notably "on" = enabled-but-curated, never full)."""
+
+    @pytest.mark.parametrize("val", ["true", "1", "yes", "TRUE", " Yes "])
+    def test_truthy_enables_full_surface(self, monkeypatch, val):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", val)
+        assert pardot_full_surface() is True
+
+    @pytest.mark.parametrize("val", [None, "", "on", "garbage", "false", "0"])
+    def test_non_truthy_stays_curated(self, monkeypatch, val):
+        if val is None:
+            monkeypatch.delenv("PARDOT_TOOLS_ENABLED", raising=False)
+        else:
+            monkeypatch.setenv("PARDOT_TOOLS_ENABLED", val)
+        assert pardot_full_surface() is False
+
+
+# --- Disabled short-circuit (PARDOT_TOOLS_ENABLED off) ---
+
+
+class TestWithRetryDisabled:
+    """When Pardot is off, _with_retry raises before any auth/HTTP work — the one
+    guard that covers every read, write, and composite Pardot leg."""
+
+    def test_disabled_raises_without_running_func(self, monkeypatch):
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "false")
+        ran = []
+        with pytest.raises(RuntimeError, match="disabled"):
+            _with_retry(lambda session: ran.append("ran"))
+        assert ran == []  # func never executed — no HTTP attempted
+
+    @patch("src.pardot_client.get_session")
+    def test_disabled_does_not_build_session(self, mock_get_session, monkeypatch):
+        # get_session() is where the SF token is fetched and the HTTP session is
+        # built; short-circuiting before it means no auth work happens.
+        monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "0")
+        with pytest.raises(RuntimeError, match="PARDOT_TOOLS_ENABLED"):
+            _with_retry(lambda session: "unreachable")
+        mock_get_session.assert_not_called()
 
 
 # --- _with_retry ---
