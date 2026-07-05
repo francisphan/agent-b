@@ -76,6 +76,28 @@ class TestAggregate:
         recs = [_rec("t", auth="read"), _rec("t", auth="write"), _rec("t", auth="read")]
         assert aggregate(recs)["by_auth"] == {"read": 2, "write": 1}
 
+    def test_degraded_counted_separately_from_ok_and_errors(self):
+        recs = [
+            _rec("g", status="degraded"),
+            _rec("g"),
+            _rec("g", status="error"),
+        ]
+        stats = aggregate(recs)
+        assert stats["total"] == 3
+        assert stats["degraded"] == 1
+        assert stats["errors"] == 1
+        assert stats["ok"] == 1  # total - errors - degraded, no longer counts degraded
+
+    def test_inband_errors_labeled_in_error_types(self):
+        # status=error with no error_type == an in-band {"error": ...} return.
+        recs = [
+            {"event": "tool_call", "tool": "t", "status": "error", "duration_ms": 5},
+            _rec("t", status="error", error_type="ToolError"),
+        ]
+        error_types = aggregate(recs)["error_types"]
+        assert error_types["(in-band)"] == 1
+        assert error_types["ToolError"] == 1
+
     def test_empty(self):
         stats = aggregate([])
         assert stats["total"] == 0
@@ -162,6 +184,11 @@ class TestRenderText:
         out = render_text(aggregate([_rec("sf_soql_query"), _rec("sf_soql_query")]))
         assert "sf_soql_query" in out
         assert "2 calls" in out
+
+    def test_shows_degraded_count(self):
+        recs = [_rec("guest_360_profile", status="degraded"), _rec("sf_soql_query")]
+        out = render_text(aggregate(recs))
+        assert "1 degraded" in out
 
     def test_top_limit(self):
         recs = [_rec(f"tool{i}") for i in range(5)]

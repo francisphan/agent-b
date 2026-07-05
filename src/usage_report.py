@@ -75,9 +75,14 @@ def aggregate(records: list[dict]) -> dict[str, Any]:
     """Reduce raw tool_call records to summary statistics."""
     total = len(records)
     errors = sum(1 for r in records if r.get("status") == "error")
+    degraded = sum(1 for r in records if r.get("status") == "degraded")
     by_auth: Counter = Counter(r.get("auth", "unknown") for r in records)
+    # In-band errors ({"error": ...} returns) carry no error_type — they aren't
+    # raised exceptions — so label them "(in-band)" rather than "Unknown".
     error_types: Counter = Counter(
-        r.get("error_type", "Unknown") for r in records if r.get("status") == "error"
+        (r.get("error_type") or "(in-band)")
+        for r in records
+        if r.get("status") == "error"
     )
 
     durations: dict[str, list[float]] = defaultdict(list)
@@ -114,8 +119,9 @@ def aggregate(records: list[dict]) -> dict[str, Any]:
     timestamps = sorted(r["ts"] for r in records if r.get("ts"))
     return {
         "total": total,
-        "ok": total - errors,
+        "ok": total - errors - degraded,
         "errors": errors,
+        "degraded": degraded,
         "error_rate": errors / total if total else 0.0,
         "span": {
             "first": timestamps[0] if timestamps else None,
@@ -195,6 +201,7 @@ def render_text(stats: dict[str, Any], top: int | None = None) -> str:
     lines.append(
         f"Tool usage — {stats['total']} calls "
         f"({stats['ok']} ok, {stats['errors']} errors, "
+        f"{stats.get('degraded', 0)} degraded, "
         f"{stats['error_rate'] * 100:.1f}% error rate)"
     )
     lines.append(f"Window: {span['first']}  →  {span['last']}")
