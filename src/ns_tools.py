@@ -28,11 +28,12 @@ def register_tools(mcp):
         entityid / companyname / firstname / lastname); customer balance is
         'balancesearch' / 'overduebalancesearch' (NOT 'balance').
 
-        Row limiting: SuiteQL is Oracle SQL and does NOT support the 'LIMIT'/'OFFSET'
-        keywords — appending "LIMIT 50" 400s with a syntax error near 'LIMIT'. To cap
-        rows, either write 'FETCH FIRST n ROWS ONLY' inside the SQL (e.g. "... ORDER BY
-        t.trandate DESC FETCH FIRST 50 ROWS ONLY") or pass the 'limit' parameter below
-        (which paginates server-side).
+        Row limiting: SuiteQL is Oracle SQL and does NOT support the MySQL-style
+        'LIMIT n' clause — appending "LIMIT 50" 400s with a syntax error near 'LIMIT'.
+        To cap rows, either write 'FETCH FIRST n ROWS ONLY' inside the SQL (e.g.
+        "... ORDER BY t.trandate DESC FETCH FIRST 50 ROWS ONLY", optionally after
+        'OFFSET n ROWS') or pass the 'limit' parameter below (which paginates
+        server-side).
 
         Use ns_get_netsuite_schema to explore fields, tables, and example SuiteQL before querying.
 
@@ -51,16 +52,18 @@ def register_tools(mcp):
             If offset > 0: a dict with 'items', 'hasMore', 'offset', and 'totalResults'.
             On failure: a single-element list or dict with an error message.
         """
-        # Pre-flight validation. A hard-invalid query (e.g. a SQL LIMIT clause,
-        # which SuiteQL rejects) is short-circuited here so the actionable message
-        # reaches the caller instead of a raw NetSuite 400.
+        # Pre-flight validation. Only findings the validator marks blocking (a
+        # SQL LIMIT clause, which SuiteQL always rejects) short-circuit here so
+        # the actionable message reaches the caller instead of a raw NetSuite
+        # 400. Everything else (e.g. an unextractable FROM clause) stays
+        # advisory and the query still executes — the validator is regex-based
+        # and can be wrong about unusual-but-valid SQL.
         validation = validate_suiteql(query)
-        if not validation["valid"]:
-            return {
-                "error": "; ".join(validation["warnings"]) or "Invalid SuiteQL query.",
-                "warnings": validation["warnings"],
-                "suggestions": validation["suggestions"],
-            }
+        if validation["blocking"]:
+            msg = "; ".join(validation["warnings"])
+            if validation["suggestions"]:
+                msg += " Suggestion: " + " ".join(validation["suggestions"])
+            return [{"error": msg}]
 
         try:
             if offset > 0:
@@ -182,17 +185,17 @@ def register_tools(mcp):
             Unknown types are silently omitted.
         """
         if not record_types.strip():
-            return {**NS_SCHEMA, "_tips": NS_TIPS}
-
-        result: dict = {}
-        for name in record_types.split(","):
-            name = name.strip()
-            if not name:
-                continue
-            for schema_name, schema_data in NS_SCHEMA.items():
-                if schema_name.lower() == name.lower():
-                    result[schema_name] = schema_data
-                    break
+            result = dict(NS_SCHEMA)
+        else:
+            result = {}
+            for name in record_types.split(","):
+                name = name.strip()
+                if not name:
+                    continue
+                for schema_name, schema_data in NS_SCHEMA.items():
+                    if schema_name.lower() == name.lower():
+                        result[schema_name] = schema_data
+                        break
 
         result["_tips"] = NS_TIPS
         return result
