@@ -587,8 +587,14 @@ def lookup_wine_owner(
             result["guest_profile"] = profile
             errs = profile.get("_errors") or []
             result["enrichment_status"] = "ok" if not errs else f"partial: {'; '.join(errs)}"
+            if errs:
+                # Hoist to the top level: the composite convention (guest_360,
+                # person_brief) — and the usage-log degraded classifier — looks
+                # for _errors on the returned dict, not nested in a section.
+                result["_errors"] = list(errs)
         except Exception as e:  # noqa: BLE001
             result["enrichment_status"] = f"unavailable: {e}"
+            result["_errors"] = [f"guest_360: {e}"]
     elif enrich_guest_profile and not email:
         result["enrichment_status"] = "skipped: owner has no email on file"
 
