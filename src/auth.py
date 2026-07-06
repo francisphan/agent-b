@@ -14,8 +14,41 @@ checks both paths so it Just Works regardless of which middleware is mounted.
 
 import os
 from contextvars import ContextVar
+from typing import Optional
 
 AUTH_LEVEL: ContextVar[str] = ContextVar("auth_level", default="none")
+
+# Who is calling, for usage attribution (distinct from AUTH_LEVEL's read/write).
+# Set at authentication time: "sabueso" for the static write token, "s2s-read"
+# for the static read token, or the OAuth user's email. Defaults to "anonymous"
+# when no auth is configured (local dev). This contextvar is the fallback source;
+# tool_logging prefers reading the caller off the live request (reliable across
+# the streamable-http task boundary, the same reason corr is read that way).
+CALLER: ContextVar[str] = ContextVar("caller", default="anonymous")
+
+# Caller labels that denote a static-token (server-to-server) client. Used to
+# decide whether to trust a client-supplied X-End-User header: only static
+# clients (i.e. the Sabueso bot) may attribute calls to an end user; an OAuth
+# user's identity IS their email, so they can't spoof attribution rows.
+STATIC_CALLERS = frozenset({"sabueso", "s2s-read"})
+
+
+def caller_label(client_id: Optional[str], subject: Optional[str]) -> str:
+    """Map an AccessToken's (client_id, subject) to a stable usage-attribution label.
+
+    - the static write token → "sabueso" (the Slack bot uses it)
+    - the static read token  → "s2s-read"
+    - an OAuth user          → their email (the JWT ``sub`` claim)
+    - anything else          → the client_id, or "anonymous" if absent
+    """
+    if client_id == "static-write":
+        return "sabueso"
+    if client_id == "static-read":
+        return "s2s-read"
+    if subject:
+        return subject
+    return client_id or "anonymous"
+
 
 READ_TOKEN = os.getenv("MCP_API_TOKEN")
 WRITE_TOKEN = os.getenv("MCP_WRITE_TOKEN")

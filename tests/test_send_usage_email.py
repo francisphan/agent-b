@@ -84,11 +84,50 @@ class TestRenderHtml:
         assert "No errors this week" in html
 
 
+class TestWhosCalling:
+    def test_section_lists_clients_and_end_users(self, report):
+        html = sue.render_html(report)
+        assert "calling" in html  # section header ("Who's" is HTML-escaped)
+        assert "sabueso (Slack bot)" in html
+        assert "fs.phan@gmail.com" in html
+        assert "s2s-read" in html
+        # Slack user ids render verbatim, indented under sabueso.
+        assert "U06L80JUUD6" in html
+        assert "↳ U06L80JUUD6" in html
+
+    def test_end_user_bar_scales_to_sabueso_total(self, report):
+        # Busiest end-user (40 of sabueso's 72) → round(100*40/72) == 56%.
+        assert "width:56%" in sue.render_html(report)
+
+
 class TestRenderText:
     def test_text_contains_tools_and_totals(self, report):
         text = sue.render_text(report)
         assert "guest_360_profile" in text
         assert "Total calls: 84" in text
+
+    def test_text_includes_callers(self, report):
+        text = sue.render_text(report)
+        assert "Who's calling:" in text
+        assert "sabueso (Slack bot)" in text
+        assert "U06L80JUUD6" in text
+
+
+class TestSaveJson:
+    def test_save_json_writes_valid_report(self, tmp_path, capsys):
+        out = tmp_path / "snap.json"
+        rc = sue.main(["--dry-run", "--fixture", str(_FIXTURE), "--save-json", str(out)])
+        assert rc == 0
+        saved = json.loads(out.read_text(encoding="utf-8"))
+        assert saved["totals"]["calls"] == 84
+        assert "per_client" in saved
+        assert "per_end_user" in saved
+
+    def test_save_json_creates_parent_dirs(self, tmp_path, capsys):
+        out = tmp_path / "nested" / "dir" / "snap.json"
+        rc = sue.main(["--dry-run", "--fixture", str(_FIXTURE), "--save-json", str(out)])
+        assert rc == 0
+        assert out.exists()
 
 
 class TestHelpers:

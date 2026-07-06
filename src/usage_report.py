@@ -202,6 +202,54 @@ def _per_day_counts(records: list[dict]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+def _top_tools(records: list[dict], n: int = 3) -> list[dict]:
+    """The ``n`` most-called tools in ``records`` as ``[{tool, calls}]``."""
+    counts: Counter = Counter(r.get("tool", "?") for r in records)
+    return [{"tool": tool, "calls": calls} for tool, calls in counts.most_common(n)]
+
+
+def _per_client(records: list[dict]) -> list[dict]:
+    """Per-calling-client rollup: who is calling and their busiest tools.
+
+    ``client`` is the usage-attribution label stamped by tool_logging (Sabueso,
+    an s2s reader, or an OAuth user's email). Sorted by call volume descending.
+    """
+    by_client: dict[str, list[dict]] = defaultdict(list)
+    for r in records:
+        by_client[r.get("client") or "anonymous"].append(r)
+    out = [
+        {
+            "client": client,
+            "calls": len(recs),
+            "errors": sum(1 for r in recs if r.get("status") == "error"),
+            "degraded": sum(1 for r in recs if r.get("status") == "degraded"),
+            "top_tools": _top_tools(recs, 3),
+        }
+        for client, recs in by_client.items()
+    ]
+    out.sort(key=lambda c: c["calls"], reverse=True)
+    return out
+
+
+def _per_end_user(records: list[dict], client: str = "sabueso") -> list[dict]:
+    """Per-end-user rollup under a single client (the Sabueso bot by default).
+
+    Only records that carry an ``end_user`` (a Slack user id the bot forwards)
+    for the given client are grouped; everything else is ignored. Sorted by
+    volume descending.
+    """
+    by_user: dict[str, list[dict]] = defaultdict(list)
+    for r in records:
+        if r.get("client") == client and r.get("end_user"):
+            by_user[r["end_user"]].append(r)
+    out = [
+        {"end_user": user, "calls": len(recs), "top_tools": _top_tools(recs, 3)}
+        for user, recs in by_user.items()
+    ]
+    out.sort(key=lambda u: u["calls"], reverse=True)
+    return out
+
+
 def weekly_report(records: list[dict], prev_records: list[dict]) -> dict[str, Any]:
     """Summarise a week of usage for the HTML email, with week-over-week context.
 
@@ -261,6 +309,8 @@ def weekly_report(records: list[dict], prev_records: list[dict]) -> dict[str, An
         "per_tool": per_tool,
         "auth_split": stats["by_auth"],
         "top_errors": top_errors,
+        "per_client": _per_client(records),
+        "per_end_user": _per_end_user(records),
     }
 
 

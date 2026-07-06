@@ -29,6 +29,7 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import AnyUrl
 
+from src.auth import CALLER, caller_label
 from src.oauth_store import OAuthStore, build_oauth_store
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -292,13 +293,19 @@ class GoogleOAuthProvider(
         )
 
     async def load_access_token(self, token: str) -> AccessToken | None:
+        # As each credential resolves, stamp CALLER so usage logging can attribute
+        # the call. We also carry the OAuth user's email on AccessToken.subject so
+        # the tool dispatcher can recover it off the live request (reliable across
+        # the streamable-http task boundary, where a contextvar may be stale).
         if self.static_write_token and hmac.compare_digest(token, self.static_write_token):
+            CALLER.set(caller_label("static-write", None))
             return AccessToken(
                 token=token,
                 client_id="static-write",
                 scopes=[READ_SCOPE, WRITE_SCOPE],
             )
         if self.static_read_token and hmac.compare_digest(token, self.static_read_token):
+            CALLER.set(caller_label("static-read", None))
             return AccessToken(
                 token=token,
                 client_id="static-read",
@@ -316,11 +323,15 @@ class GoogleOAuthProvider(
         except jwt.PyJWTError:
             return None
 
+        client_id = payload.get("client_id", "unknown")
+        subject = payload.get("sub")
+        CALLER.set(caller_label(client_id, subject))
         return AccessToken(
             token=token,
-            client_id=payload.get("client_id", "unknown"),
+            client_id=client_id,
             scopes=payload["scope"].split(),
             expires_at=int(payload["exp"]),
+            subject=subject,
         )
 
     async def revoke_token(self, token) -> None:

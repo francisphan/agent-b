@@ -43,5 +43,65 @@
     {"error": "OPERA: leg unavailable (opera-pms-api tunnel down)", "count": 2},
     {"error": "Salesforce: no record for j***@vines.com", "count": 1},
     {"error": "ns_suiteql_query timed out after 30s", "count": 1}
+  ],
+  "per_client": [
+    {
+      "client": "sabueso",
+      "calls": 72,
+      "errors": 4,
+      "degraded": 2,
+      "top_tools": [
+        {"tool": "guest_360_profile", "calls": 24},
+        {"tool": "sf_soql_query", "calls": 20},
+        {"tool": "lookup_guest_by_email", "calls": 14}
+      ]
+    },
+    {
+      "client": "fs.phan@gmail.com",
+      "calls": 8,
+      "errors": 0,
+      "degraded": 0,
+      "top_tools": [
+        {"tool": "sf_soql_query", "calls": 5},
+        {"tool": "person_brief", "calls": 3}
+      ]
+    },
+    {
+      "client": "s2s-read",
+      "calls": 4,
+      "errors": 0,
+      "degraded": 0,
+      "top_tools": [
+        {"tool": "wine_owner_lookup", "calls": 4}
+      ]
+    }
+  ],
+  "per_end_user": [
+    {
+      "end_user": "U06L80JUUD6",
+      "calls": 40,
+      "top_tools": [
+        {"tool": "guest_360_profile", "calls": 16},
+        {"tool": "sf_soql_query", "calls": 14},
+        {"tool": "lookup_guest_by_email", "calls": 10}
+      ]
+    },
+    {
+      "end_user": "U08ABCD1234",
+      "calls": 22,
+      "top_tools": [
+        {"tool": "guest_360_profile", "calls": 8},
+        {"tool": "person_brief", "calls": 8},
+        {"tool": "ns_suiteql_query", "calls": 6}
+      ]
+    },
+    {
+      "end_user": "U03ZZQWERTY",
+      "calls": 10,
+      "top_tools": [
+        {"tool": "sf_soql_query", "calls": 6},
+        {"tool": "wine_owner_lookup", "calls": 4}
+      ]
+    }
   ]
 }

@@ -59,6 +59,7 @@ class TestUsageReportRoute:
         assert body["totals"]["calls"] == 1
         assert body["days"] == 7
         assert "per_tool" in body and "per_day" in body and "prev_totals" in body
+        assert "per_client" in body and "per_end_user" in body
         assert body["per_tool"][0]["tool"] == "sf_soql_query"
 
     def test_write_token_also_allowed(self, monkeypatch):

@@ -269,6 +269,63 @@ def _top_errors(report: dict) -> str:
     )
 
 
+def _client_display(client: str) -> str:
+    return "sabueso (Slack bot)" if client == "sabueso" else client
+
+
+def _tools_summary(top_tools: list) -> str:
+    return ", ".join(f"{_esc(t.get('tool', '?'))} ({t.get('calls', 0)})" for t in top_tools)
+
+
+def _clients_table(report: dict) -> str:
+    """The 'Who's calling' section: one row per client, Slack end-users nested.
+
+    Client volume bars scale to the busiest client; the end-user rows under
+    sabueso scale to sabueso's own total so they're comparable to each other.
+    """
+    clients = report.get("per_client", [])
+    end_users = report.get("per_end_user", [])
+    peak = max([c.get("calls", 0) for c in clients], default=0)
+    sabueso_calls = next((c.get("calls", 0) for c in clients if c.get("client") == "sabueso"), 0)
+
+    rows = []
+    for c in clients:
+        name = _client_display(c.get("client", "anonymous"))
+        tools = _tools_summary(c.get("top_tools", []))
+        rows.append(
+            "<tr>"
+            f'<td style="font-size:13px;color:{INK};font-weight:600;padding:8px 8px 8px 0;'
+            f'white-space:nowrap;">{_esc(name)}</td>'
+            f'<td style="padding:8px;width:34%;">{_bar(_pct(c.get("calls", 0), peak), ACCENT)}</td>'
+            f'<td style="text-align:right;font-size:13px;color:{INK};font-weight:600;'
+            f'padding:8px;">{c.get("calls", 0)}</td>'
+            f'<td style="font-size:12px;color:{MUTED};padding:8px 0 8px 8px;">{tools}</td>'
+            "</tr>"
+        )
+        if c.get("client") == "sabueso":
+            for u in end_users:
+                utools = _tools_summary(u.get("top_tools", []))
+                rows.append(
+                    "<tr>"
+                    f'<td style="font-size:12px;color:{MUTED};padding:4px 8px 4px 16px;'
+                    f'white-space:nowrap;font-family:monospace;">↳ {_esc(u.get("end_user", ""))}</td>'
+                    f'<td style="padding:4px 8px;">{_bar(_pct(u.get("calls", 0), sabueso_calls), BAR, 8)}</td>'
+                    f'<td style="text-align:right;font-size:12px;color:{MUTED};'
+                    f'padding:4px 8px;">{u.get("calls", 0)}</td>'
+                    f'<td style="font-size:11px;color:{MUTED};padding:4px 0 4px 8px;">{utools}</td>'
+                    "</tr>"
+                )
+    if not rows:
+        rows.append(
+            f'<tr><td colspan="4" style="font-size:13px;color:{MUTED};padding:8px 0;">'
+            "No calls recorded.</td></tr>"
+        )
+    return (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="border-collapse:collapse;">' + "".join(rows) + "</table>"
+    )
+
+
 def _section(title: str, body: str) -> str:
     return (
         f'<div style="font-size:13px;font-weight:700;color:{ACCENT};'
@@ -314,6 +371,7 @@ def render_html(report: dict) -> str:
         + _section("Calls per day", _day_bars(report))
         + _section("By tool", _tool_table(report))
         + _auth_line(report)
+        + _section("Who's calling", _clients_table(report))
         + _section("Top errors", _top_errors(report))
         + "</td></tr>"
         '<tr><td style="padding:20px 28px 26px;">'
@@ -341,6 +399,16 @@ def render_text(report: dict) -> str:
             f"p50 {_fmt_ms(t.get('p50_ms'))}  p95 {_fmt_ms(t.get('p95_ms'))}  "
             f"err {t.get('errors', 0)}  deg {t.get('degraded', 0)}"
         )
+    if report.get("per_client"):
+        lines += ["", "Who's calling:"]
+        end_users = report.get("per_end_user", [])
+        for c in report["per_client"]:
+            lines.append(
+                f"  {_client_display(c.get('client', '?')):<28} {c.get('calls', 0):>5} calls"
+            )
+            if c.get("client") == "sabueso":
+                for u in end_users:
+                    lines.append(f"    {u.get('end_user', ''):<26} {u.get('calls', 0):>5} calls")
     if report.get("top_errors"):
         lines += ["", "Top errors:"]
         for e in report["top_errors"]:
@@ -418,6 +486,11 @@ def main(argv: list[str] | None = None) -> int:
         "--fixture",
         help="Render from a local JSON report file instead of fetching (implies no network).",
     )
+    parser.add_argument(
+        "--save-json",
+        metavar="PATH",
+        help="Also write the full report JSON to PATH (works with --dry-run too).",
+    )
     args = parser.parse_args(argv)
 
     if args.fixture:
@@ -425,6 +498,14 @@ def main(argv: list[str] | None = None) -> int:
     else:
         base_url = _require_env("AGENT_B_URL")
         report = fetch_report(base_url, os.getenv("MCP_API_TOKEN"), args.days)
+
+    # Persist the snapshot before sending so a later email failure can't lose it
+    # (the workflow commits this file for a downstream auditor to consume).
+    if args.save_json:
+        out = Path(args.save_json)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"Wrote report snapshot to {out}", file=sys.stderr)
 
     subject = build_subject(report)
     html = render_html(report)

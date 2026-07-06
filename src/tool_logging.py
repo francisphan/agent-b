@@ -47,6 +47,9 @@ correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=No
 # Cap to keep a hostile/garbage header out of the logs unbounded.
 _MAX_CORRELATION_ID = 64
 
+# Same cap for the X-End-User header (see _end_user_from_request).
+_MAX_END_USER = 64
+
 
 def _correlation_from_request() -> str | None:
     """Read X-Correlation-ID off the active MCP request.
@@ -81,6 +84,77 @@ def _correlation_from_request() -> str | None:
         return None
     cid = headers.get("x-correlation-id")
     return cid[:_MAX_CORRELATION_ID] if cid else None
+
+
+def _active_request() -> Any:
+    """Return the Starlette request hung off the SDK's request_ctx, or None.
+
+    Shared by the caller/end-user readers below. Same reliable source as
+    _correlation_from_request: it lives on the task that dispatches the tool
+    handler, unlike an ASGI-middleware contextvar. Returns None off the HTTP
+    path (e.g. stdio) or before request_ctx is set.
+    """
+    try:
+        from mcp.server.lowlevel.server import request_ctx
+    except Exception:  # pragma: no cover - SDK layout change
+        return None
+    try:
+        ctx = request_ctx.get()
+    except LookupError:
+        return None
+    return getattr(ctx, "request", None)
+
+
+def _caller_from_request() -> str | None:
+    """Resolve the caller label off the live request's authenticated user.
+
+    The SDK stores whatever ``load_access_token`` returned on
+    ``request.scope["user"].access_token`` (an ``AccessToken``), and we hung the
+    OAuth email on its ``subject``. Reading it here — rather than from the CALLER
+    contextvar — is reliable across the streamable-http task boundary, the same
+    reason corr is read from the request. Returns None when the request carries
+    no authenticated user (no-OAuth mode, where CALLER is the fallback).
+    """
+    request = _active_request()
+    scope = getattr(request, "scope", None)
+    user = scope.get("user") if hasattr(scope, "get") else None
+    token = getattr(user, "access_token", None)
+    if token is None:
+        return None
+    from src.auth import caller_label
+
+    return caller_label(getattr(token, "client_id", None), getattr(token, "subject", None))
+
+
+def _end_user_from_request() -> str | None:
+    """Read the optional X-End-User header off the live request.
+
+    Sabueso sets this to the originating Slack user id so per-end-user usage can
+    be attributed under the shared bot credential. Read the same way as corr.
+    """
+    request = _active_request()
+    headers = getattr(request, "headers", None)
+    if not headers:
+        return None
+    eu = headers.get("x-end-user")
+    return eu[:_MAX_END_USER] if eu else None
+
+
+def _caller_context() -> tuple[str, str | None]:
+    """Resolve ``(client, end_user)`` for a tool call.
+
+    ``client`` prefers the live-request read and falls back to the CALLER
+    contextvar (set at auth time), then "anonymous". ``end_user`` is only
+    trusted for static-token clients (Sabueso): an OAuth user shouldn't be able
+    to spoof attribution rows, and their identity is already their email.
+    """
+    from src.auth import CALLER, STATIC_CALLERS
+
+    client = _caller_from_request() or CALLER.get()
+    end_user = _end_user_from_request()
+    if not (end_user and client in STATIC_CALLERS):
+        end_user = None
+    return client, end_user
 
 
 # Per-string-value cap so a giant query or note can't bloat the logs.
@@ -444,6 +518,9 @@ def instrument(mcp) -> None:
         corr = _correlation_from_request()
         if corr is None:
             corr = correlation_id.get()
+        # Who is calling (Sabueso / s2s / an OAuth email) and, for static clients
+        # only, the end user they're acting for (e.g. a Slack user id).
+        client, end_user = _caller_context()
         redacted_args = redact(arguments) if isinstance(arguments, dict) else arguments
         try:
             result = await original_call_tool(name, arguments, *args, **kwargs)
@@ -453,10 +530,12 @@ def instrument(mcp) -> None:
             # would otherwise leak the exact PII _clip_error exists to prevent.
             exc_snippet = _clip_error(str(exc))
             logger.info(
-                "tool=%s corr=%s auth=%s status=error dur=%dms error=%s: %s | args=%s",
+                "tool=%s corr=%s auth=%s client=%s end_user=%s status=error dur=%dms error=%s: %s | args=%s",
                 name,
                 corr,
                 auth,
+                client,
+                end_user,
                 duration_ms,
                 type(exc).__name__,
                 exc_snippet,
@@ -469,6 +548,8 @@ def instrument(mcp) -> None:
                     "tool": name,
                     "corr": corr,
                     "auth": auth,
+                    "client": client,
+                    "end_user": end_user,
                     "status": "error",
                     "duration_ms": duration_ms,
                     "error_type": type(exc).__name__,
@@ -486,20 +567,24 @@ def instrument(mcp) -> None:
         size_str = size if size is not None else "?"
         if status == "ok":
             logger.info(
-                "tool=%s corr=%s auth=%s status=ok dur=%dms result=%sB | args=%s",
+                "tool=%s corr=%s auth=%s client=%s end_user=%s status=ok dur=%dms result=%sB | args=%s",
                 name,
                 corr,
                 auth,
+                client,
+                end_user,
                 duration_ms,
                 size_str,
                 redacted_args,
             )
         else:
             logger.info(
-                "tool=%s corr=%s auth=%s status=%s dur=%dms result=%sB error=%s | args=%s",
+                "tool=%s corr=%s auth=%s client=%s end_user=%s status=%s dur=%dms result=%sB error=%s | args=%s",
                 name,
                 corr,
                 auth,
+                client,
+                end_user,
                 status,
                 duration_ms,
                 size_str,
@@ -512,6 +597,8 @@ def instrument(mcp) -> None:
             "tool": name,
             "corr": corr,
             "auth": auth,
+            "client": client,
+            "end_user": end_user,
             "status": status,
             "duration_ms": duration_ms,
             "result_bytes": size,

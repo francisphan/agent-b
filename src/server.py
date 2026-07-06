@@ -16,7 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from src import usage_store
-from src.auth import ALLOW_INSECURE_NO_AUTH, AUTH_LEVEL, READ_TOKEN, WRITE_TOKEN
+from src.auth import ALLOW_INSECURE_NO_AUTH, AUTH_LEVEL, CALLER, READ_TOKEN, WRITE_TOKEN
 from src.oauth_callback import make_oauth_callback_route
 from src.oauth_provider import GoogleOAuthProvider, READ_SCOPE
 from src.tool_logging import configure_logging, instrument
@@ -81,6 +81,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
             # granted when the operator explicitly opts in for local dev.
             if ALLOW_INSECURE_NO_AUTH:
                 AUTH_LEVEL.set("write")
+                CALLER.set("anonymous")
                 return await call_next(request)
             return JSONResponse(
                 {"error": "Server authentication is not configured."}, status_code=503
@@ -90,10 +91,12 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
 
         if WRITE_TOKEN and hmac.compare_digest(bearer, WRITE_TOKEN):
             AUTH_LEVEL.set("write")
+            CALLER.set("sabueso")
             return await call_next(request)
 
         if READ_TOKEN and hmac.compare_digest(bearer, READ_TOKEN):
             AUTH_LEVEL.set("read")
+            CALLER.set("s2s-read")
             return await call_next(request)
 
         return JSONResponse({"error": "Unauthorized"}, status_code=401)

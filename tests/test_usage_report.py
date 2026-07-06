@@ -181,7 +181,16 @@ def _epoch(y, m, d, h=12):
     return datetime(y, m, d, h, tzinfo=timezone.utc).timestamp()
 
 
-def _wrec(tool="sf_soql_query", status="ok", dur=10, ts=None, auth="read", error=None):
+def _wrec(
+    tool="sf_soql_query",
+    status="ok",
+    dur=10,
+    ts=None,
+    auth="read",
+    error=None,
+    client=None,
+    end_user=None,
+):
     """A Redis-mirror-shaped record: epoch float ts, like usage_store stores."""
     r = {
         "event": "tool_call",
@@ -197,6 +206,10 @@ def _wrec(tool="sf_soql_query", status="ok", dur=10, ts=None, auth="read", error
         r["error_type"] = "ValueError"
     if error is not None:
         r["error"] = error
+    if client is not None:
+        r["client"] = client
+    if end_user is not None:
+        r["end_user"] = end_user
     return r
 
 
@@ -258,6 +271,48 @@ class TestWeeklyReport:
         assert rep["per_tool"] == []
         assert rep["per_day"] == {}
         assert rep["top_errors"] == []
+        assert rep["per_client"] == []
+        assert rep["per_end_user"] == []
+
+
+class TestPerClient:
+    def test_rollup_sorted_with_top_tools(self):
+        recs = [
+            _wrec(client="sabueso", tool="a"),
+            _wrec(client="sabueso", tool="a", status="error"),
+            _wrec(client="sabueso", tool="b", status="degraded"),
+            _wrec(client="alice@x.com", tool="c"),
+        ]
+        pc = weekly_report(recs, [])["per_client"]
+        assert [c["client"] for c in pc] == ["sabueso", "alice@x.com"]  # busiest first
+        sab = pc[0]
+        assert sab["calls"] == 3
+        assert sab["errors"] == 1
+        assert sab["degraded"] == 1
+        assert sab["top_tools"][0] == {"tool": "a", "calls": 2}
+
+    def test_missing_client_bucketed_anonymous(self):
+        pc = weekly_report([_wrec()], [])["per_client"]
+        assert pc[0]["client"] == "anonymous"
+
+
+class TestPerEndUser:
+    def test_only_sabueso_records_with_end_user(self):
+        recs = [
+            _wrec(client="sabueso", end_user="U1", tool="a"),
+            _wrec(client="sabueso", end_user="U1", tool="a"),
+            _wrec(client="sabueso", end_user="U2", tool="b"),
+            _wrec(client="sabueso", tool="c"),  # no end_user → excluded
+            _wrec(client="alice@x.com", end_user="U9", tool="d"),  # not sabueso → excluded
+        ]
+        peu = weekly_report(recs, [])["per_end_user"]
+        assert [u["end_user"] for u in peu] == ["U1", "U2"]  # busiest first
+        assert peu[0]["calls"] == 2
+        assert peu[0]["top_tools"][0] == {"tool": "a", "calls": 2}
+
+    def test_empty_when_no_end_users(self):
+        recs = [_wrec(client="sabueso", tool="a")]
+        assert weekly_report(recs, [])["per_end_user"] == []
 
 
 class TestRenderText:

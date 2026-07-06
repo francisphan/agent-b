@@ -431,6 +431,98 @@ class TestUsageStoreMirror:
         assert record["status"] == "ok"
 
 
+class _FakeUser:
+    """Stands in for Starlette's AuthenticatedUser on the request scope."""
+
+    def __init__(self, access_token):
+        self.access_token = access_token
+
+
+class _FakeRequest:
+    def __init__(self, headers, user=None):
+        self.headers = headers
+        self.scope = {"user": user} if user is not None else {}
+
+
+class TestClientAttribution:
+    """client/end_user resolution off the live request, honoring the trust rule."""
+
+    def _call_with_request(self, mcp, *, headers, user):
+        from mcp.server.lowlevel.server import request_ctx
+        from mcp.shared.context import RequestContext
+
+        req = _FakeRequest(headers, user)
+        token = request_ctx.set(RequestContext("r1", None, None, None, request=req))
+        try:
+            asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
+        finally:
+            request_ctx.reset(token)
+
+    def _record(self, usage_path):
+        return json.loads(usage_path.read_text().strip())
+
+    def test_static_client_records_end_user(self, usage_path):
+        from mcp.server.auth.provider import AccessToken
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        user = _FakeUser(AccessToken(token="t", client_id="static-write", scopes=["agent-b:read"]))
+        self._call_with_request(mcp, headers={"x-end-user": "U06L80JUUD6"}, user=user)
+
+        rec = self._record(usage_path)
+        assert rec["client"] == "sabueso"
+        assert rec["end_user"] == "U06L80JUUD6"
+
+    def test_oauth_client_ignores_end_user_header(self, usage_path):
+        from mcp.server.auth.provider import AccessToken
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        user = _FakeUser(
+            AccessToken(
+                token="t",
+                client_id="claude-desktop-1",
+                scopes=["agent-b:read"],
+                subject="alice@vines.com",
+            )
+        )
+        self._call_with_request(mcp, headers={"x-end-user": "U06L80JUUD6"}, user=user)
+
+        rec = self._record(usage_path)
+        # The caller IS the OAuth email; a spoofed X-End-User is not trusted.
+        assert rec["client"] == "alice@vines.com"
+        assert rec["end_user"] is None
+
+    def test_static_client_without_header_has_no_end_user(self, usage_path):
+        from mcp.server.auth.provider import AccessToken
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        user = _FakeUser(AccessToken(token="t", client_id="static-read", scopes=["agent-b:read"]))
+        self._call_with_request(mcp, headers={}, user=user)
+
+        rec = self._record(usage_path)
+        assert rec["client"] == "s2s-read"
+        assert rec["end_user"] is None
+
+    def test_falls_back_to_caller_contextvar_without_request_user(self, usage_path):
+        from src.auth import CALLER
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        cv = CALLER.set("sabueso")
+        try:
+            self._call_with_request(mcp, headers={"x-end-user": "U123"}, user=None)
+        finally:
+            CALLER.reset(cv)
+
+        rec = self._record(usage_path)
+        # No authenticated user on the request → CALLER fallback; still a static
+        # client, so the end-user header is honored.
+        assert rec["client"] == "sabueso"
+        assert rec["end_user"] == "U123"
+
+
 @pytest.fixture
 def restore_log_levels():
     """Snapshot and restore levels the configure_logging tests mutate."""
