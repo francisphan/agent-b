@@ -396,6 +396,41 @@ class TestInstrumentStatus:
         assert "j***@vines.com" in record["error"]
 
 
+class TestUsageStoreMirror:
+    """_write_usage_record must also mirror into usage_store, best-effort."""
+
+    def test_tool_call_mirrors_record_into_usage_store(self, usage_path, monkeypatch):
+        from src import usage_store
+
+        captured = []
+        monkeypatch.setattr(usage_store, "record", captured.append)
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
+
+        assert len(captured) == 1
+        assert captured[0]["tool"] == "lookup"
+        assert captured[0]["status"] == "ok"
+
+    def test_raising_usage_store_record_does_not_break_call(self, usage_path, monkeypatch):
+        from src import usage_store
+
+        def boom(_rec):
+            raise RuntimeError("redis blew up")
+
+        monkeypatch.setattr(usage_store, "record", boom)
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        result = asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
+
+        # Tool return is unchanged and the JSONL record was still written.
+        assert result == {"found": True, "email": "x@y.com"}
+        record = json.loads(usage_path.read_text().strip())
+        assert record["status"] == "ok"
+
+
 @pytest.fixture
 def restore_log_levels():
     """Snapshot and restore levels the configure_logging tests mutate."""

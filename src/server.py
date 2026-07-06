@@ -4,6 +4,8 @@ import hmac
 import json
 import logging
 import os
+import time
+from datetime import datetime, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -13,10 +15,12 @@ from pydantic import AnyHttpUrl
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from src import usage_store
 from src.auth import ALLOW_INSECURE_NO_AUTH, AUTH_LEVEL, READ_TOKEN, WRITE_TOKEN
 from src.oauth_callback import make_oauth_callback_route
 from src.oauth_provider import GoogleOAuthProvider, READ_SCOPE
 from src.tool_logging import configure_logging, instrument
+from src.usage_report import weekly_report
 
 load_dotenv()
 configure_logging()
@@ -121,6 +125,71 @@ mcp = FastMCP("Agent B", **_fastmcp_kwargs)
 @mcp.custom_route("/health", methods=["GET"])
 async def health(request):
     return JSONResponse({"status": "ok"})
+
+
+def _usage_report_authorized(request) -> bool:
+    """Bearer check for /usage/report — accepts either static token.
+
+    Custom Starlette routes are NOT behind the SDK's auth middleware (that
+    guards only the MCP endpoint), and BearerAuthMiddleware is only mounted in
+    the no-OAuth path — so this route can't rely on either and checks the bearer
+    itself, accepting MCP_API_TOKEN *or* MCP_WRITE_TOKEN. When neither is
+    configured (local dev) the endpoint is open, matching BearerAuthMiddleware's
+    posture. Reads the module-level tokens so tests can monkeypatch them.
+    """
+    if not READ_TOKEN and not WRITE_TOKEN:
+        return True
+    bearer = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if WRITE_TOKEN and hmac.compare_digest(bearer, WRITE_TOKEN):
+        return True
+    if READ_TOKEN and hmac.compare_digest(bearer, READ_TOKEN):
+        return True
+    return False
+
+
+@mcp.custom_route("/usage/report", methods=["GET"])
+async def usage_report_route(request):
+    """Serve the weekly tool-usage report as JSON (bearer-protected).
+
+    Consumed by the usage-report GitHub Actions cron. ``days`` (default 7,
+    clamped to 1..30) sets the window; the immediately preceding window of the
+    same length is returned as ``prev_totals`` for week-over-week context. Reads
+    the Redis usage mirror — on a store outage returns 503 rather than a
+    misleadingly-empty report.
+    """
+    if not _usage_report_authorized(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    try:
+        days = int(request.query_params.get("days", "7"))
+    except (TypeError, ValueError):
+        days = 7
+    days = max(1, min(30, days))
+
+    now = time.time()
+    window = days * 86400
+    since_ts = now - window
+    prev_since_ts = since_ts - window
+
+    try:
+        # One read covering both windows; split locally to avoid a second LRANGE.
+        everything = usage_store.fetch(prev_since_ts)
+    except Exception as exc:
+        return JSONResponse({"error": f"usage store unavailable: {exc}"}, status_code=503)
+
+    records = [
+        r for r in everything if isinstance(r.get("ts"), (int, float)) and r["ts"] >= since_ts
+    ]
+    prev_records = [
+        r for r in everything if isinstance(r.get("ts"), (int, float)) and r["ts"] < since_ts
+    ]
+
+    report = weekly_report(records, prev_records)
+    report["days"] = days
+    report["generated_at"] = datetime.now(timezone.utc).isoformat()
+    report["since"] = datetime.fromtimestamp(since_ts, tz=timezone.utc).isoformat()
+    report["until"] = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
+    return JSONResponse(report)
 
 
 if _oauth_provider is not None:

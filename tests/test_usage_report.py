@@ -1,8 +1,9 @@
 """Tests for src/usage_report.py — JSONL aggregation."""
 
 import json
+from datetime import datetime, timezone
 
-from src.usage_report import _percentile, aggregate, load_records, render_text
+from src.usage_report import _percentile, aggregate, load_records, render_text, weekly_report
 
 
 def _rec(tool, status="ok", dur=10, auth="read", result_bytes=100, **extra):
@@ -174,6 +175,89 @@ class TestTurns:
         turns = aggregate([])["turns"]
         assert turns["count"] == 0
         assert turns["items"] == []
+
+
+def _epoch(y, m, d, h=12):
+    return datetime(y, m, d, h, tzinfo=timezone.utc).timestamp()
+
+
+def _wrec(tool="sf_soql_query", status="ok", dur=10, ts=None, auth="read", error=None):
+    """A Redis-mirror-shaped record: epoch float ts, like usage_store stores."""
+    r = {
+        "event": "tool_call",
+        "tool": tool,
+        "status": status,
+        "duration_ms": dur,
+        "auth": auth,
+        "ts": _epoch(2026, 7, 1) if ts is None else ts,
+    }
+    if status == "ok":
+        r["result_bytes"] = 100
+    else:
+        r["error_type"] = "ValueError"
+    if error is not None:
+        r["error"] = error
+    return r
+
+
+class TestWeeklyReport:
+    def test_totals_and_prev_totals(self):
+        recs = [_wrec(status="ok"), _wrec(status="error"), _wrec(status="degraded")]
+        prev = [_wrec(status="ok"), _wrec(status="ok")]
+        rep = weekly_report(recs, prev)
+        assert rep["totals"]["calls"] == 3
+        assert rep["totals"]["ok"] == 1
+        assert rep["totals"]["error"] == 1
+        assert rep["totals"]["degraded"] == 1
+        assert rep["prev_totals"]["calls"] == 2
+        assert rep["prev_totals"]["error"] == 0
+
+    def test_per_day_keys_from_epoch_ts(self):
+        recs = [
+            _wrec(ts=_epoch(2026, 7, 1)),
+            _wrec(ts=_epoch(2026, 7, 1)),
+            _wrec(ts=_epoch(2026, 7, 3)),
+        ]
+        per_day = weekly_report(recs, [])["per_day"]
+        assert per_day == {"2026-07-01": 2, "2026-07-03": 1}
+
+    def test_per_tool_sorted_with_degraded_and_percentiles(self):
+        recs = [_wrec(tool="busy", dur=d) for d in (10, 20, 30, 40)]
+        recs.append(_wrec(tool="busy", status="degraded", dur=50, error="leg down"))
+        recs.append(_wrec(tool="quiet", dur=5))
+        per_tool = weekly_report(recs, [])["per_tool"]
+        assert [t["tool"] for t in per_tool] == ["busy", "quiet"]  # busiest first
+        busy = per_tool[0]
+        assert busy["calls"] == 5
+        assert busy["degraded"] == 1
+        assert busy["p50_ms"] is not None
+        assert busy["p95_ms"] is not None
+        # Row is trimmed to the email's fields (no max_ms / avg_result_bytes).
+        assert set(busy) == {"tool", "calls", "errors", "degraded", "p50_ms", "p95_ms"}
+
+    def test_top_errors_counts_snippets(self):
+        recs = [
+            _wrec(status="error", error="boom A"),
+            _wrec(status="error", error="boom A"),
+            _wrec(status="degraded", error="boom B"),
+            _wrec(status="ok"),  # no error field, must not appear
+        ]
+        top = weekly_report(recs, [])["top_errors"]
+        assert top[0] == {"error": "boom A", "count": 2}
+        assert {"error": "boom B", "count": 1} in top
+        assert all("boom" in e["error"] for e in top)
+
+    def test_auth_split(self):
+        recs = [_wrec(auth="read"), _wrec(auth="write"), _wrec(auth="read")]
+        assert weekly_report(recs, [])["auth_split"] == {"read": 2, "write": 1}
+
+    def test_empty(self):
+        rep = weekly_report([], [])
+        assert rep["totals"]["calls"] == 0
+        assert rep["prev_totals"]["calls"] == 0
+        assert rep["per_tool"] == []
+        assert rep["per_day"] == {}
+        assert rep["top_errors"] == []
 
 
 class TestRenderText:

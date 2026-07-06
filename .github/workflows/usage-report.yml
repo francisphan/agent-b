@@ -1,0 +1,36 @@
+name: Weekly usage report
+
+# Mondays 08:00 America/Argentina/Buenos_Aires (UTC-3) == 11:00 UTC.
+# Also runnable on demand from the Actions tab.
+on:
+  schedule:
+    - cron: "0 11 * * 1"
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The script is standalone (stdlib + requests) so we don't install the
+      # whole agent-b package here — the ci.yml workflow already covers tests.
+      - name: Install requests
+        run: pip install requests
+
+      - name: Send usage email
+        run: python scripts/send_usage_email.py
+        env:
+          AGENT_B_URL: ${{ secrets.AGENT_B_URL }}
+          MCP_API_TOKEN: ${{ secrets.MCP_API_TOKEN }}
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
+          USAGE_REPORT_TO: ${{ secrets.USAGE_REPORT_TO }}

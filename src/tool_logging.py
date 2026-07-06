@@ -296,6 +296,18 @@ def _write_usage_record(record: dict) -> None:
     except Exception:  # pragma: no cover - logging must never break a tool call
         logger.debug("Could not write tool-usage record", exc_info=True)
 
+    # Mirror the record into Redis so the weekly report can serve windows the
+    # ephemeral JSONL can't (see src/usage_store.py). Independent of the JSONL
+    # write above and, like it, strictly best-effort: usage_store.record already
+    # swallows everything, but wrap the call too so an import hiccup can't break
+    # a tool call either.
+    try:
+        from src import usage_store
+
+        usage_store.record(record)
+    except Exception:  # pragma: no cover - mirror must never break a tool call
+        logger.debug("Could not mirror tool-usage record to store", exc_info=True)
+
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     """Read X-Correlation-ID off each request into a contextvar (fallback only).

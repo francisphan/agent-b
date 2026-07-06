@@ -8,7 +8,13 @@ dist/
 *.egg-info/
 .ruff_cache/
 .mypy_cache/
-scripts/
+# Local one-time scripts stay ignored, but the committed usage-report pipeline
+# is an exception. (Must ignore scripts/* rather than scripts/ so the negations
+# below can re-include specific files — git can't re-add a file whose parent
+# directory itself is excluded.)
+scripts/*
+!scripts/send_usage_email.py
+!scripts/sample_usage_report.json
 CLAUDE.md
 .cache/
 tool_usage.jsonl

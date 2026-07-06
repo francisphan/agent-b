@@ -19,6 +19,7 @@ import json
 import os
 import sys
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -181,6 +182,85 @@ def _aggregate_turns(records: list[dict]) -> dict[str, Any]:
             "max": max(calls_per_turn) if calls_per_turn else None,
         },
         "items": items,
+    }
+
+
+def _per_day_counts(records: list[dict]) -> dict[str, int]:
+    """Count calls per UTC calendar day, keyed by ISO date (YYYY-MM-DD).
+
+    Uses the epoch float ``ts`` that :mod:`src.usage_store` stamps on each
+    mirrored record. Records without a numeric ``ts`` are skipped. The result is
+    sorted by date so the email renderer can lay days out left-to-right.
+    """
+    counts: Counter = Counter()
+    for r in records:
+        ts = r.get("ts")
+        if not isinstance(ts, (int, float)):
+            continue
+        day = datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat()
+        counts[day] += 1
+    return dict(sorted(counts.items()))
+
+
+def weekly_report(records: list[dict], prev_records: list[dict]) -> dict[str, Any]:
+    """Summarise a week of usage for the HTML email, with week-over-week context.
+
+    Reuses :func:`aggregate` for the shared heavy lifting (per-tool p50/p95, auth
+    split) and adds the week-specific shape the renderer needs: per-day call
+    counts, a trimmed per-tool table that also carries a per-tool ``degraded``
+    count (which :func:`aggregate` doesn't track), a top-errors list, and the
+    previous window's totals for the WoW delta.
+
+    Both ``records`` and ``prev_records`` are the Redis-mirror shape: each record
+    carries an epoch float ``ts`` (see :mod:`src.usage_store`), which
+    :func:`_per_day_counts` turns into UTC ISO dates. ``aggregate`` itself is
+    untouched and still consumes the ISO-``ts`` JSONL shape for the CLI report.
+    """
+    stats = aggregate(records)
+    prev = aggregate(prev_records)
+
+    def _totals(s: dict) -> dict:
+        return {
+            "calls": s["total"],
+            "ok": s["ok"],
+            "error": s["errors"],
+            "degraded": s["degraded"],
+            "error_rate": s["error_rate"],
+        }
+
+    # aggregate()'s per-tool rows don't carry a degraded count; add it from the
+    # raw records and trim each row to the fields the email needs.
+    degraded_by_tool: Counter = Counter(
+        r.get("tool", "?") for r in records if r.get("status") == "degraded"
+    )
+    per_tool = [
+        {
+            "tool": t["tool"],
+            "calls": t["calls"],
+            "errors": t["errors"],
+            "degraded": degraded_by_tool.get(t["tool"], 0),
+            "p50_ms": t["p50_ms"],
+            "p95_ms": t["p95_ms"],
+        }
+        for t in stats["tools"]
+    ]
+
+    # The masked error snippet recorded on error/degraded calls, tallied. Already
+    # PII-masked server-side (see tool_logging._clip_error), so safe to surface.
+    error_tally: Counter = Counter(
+        r["error"] for r in records if r.get("status") in ("error", "degraded") and r.get("error")
+    )
+    top_errors = [
+        {"error": snippet, "count": count} for snippet, count in error_tally.most_common(5)
+    ]
+
+    return {
+        "totals": _totals(stats),
+        "prev_totals": _totals(prev),
+        "per_day": _per_day_counts(records),
+        "per_tool": per_tool,
+        "auth_split": stats["by_auth"],
+        "top_errors": top_errors,
     }
 
 
