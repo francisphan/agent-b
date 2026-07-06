@@ -467,3 +467,73 @@ class TestLookupWineOwner:
         r = lookup_wine_owner("Angelus XXI")
         assert r["match_status"] == "ambiguous"
         assert any(a["customer_id"] == "8503" for a in r["alternates"])
+
+
+class TestEnrichmentErrorsHoisted:
+    """Degraded enrichment must surface as top-level _errors (the composite
+    convention guest_360/person_brief follow, and what the usage-log degraded
+    classifier keys on) — not only nested inside guest_profile."""
+
+    @patch("src.wine_tools.guest_360")
+    @patch("src.wine_tools.rest_get")
+    @patch("src.wine_tools.suiteql_query")
+    def test_partial_enrichment_hoists_errors(self, mock_q, mock_get, mock_360):
+        candidates = [
+            {
+                "id": "712",
+                "entityid": "Guzman, Mirta",
+                "companyname": "Guzman, Mirta",
+                "brand": "Laguzman",
+                "owner_code": "GUZM",
+                "isinactive": "F",
+            },
+        ]
+        mock_q.side_effect = _fake_query(candidates=candidates, items=[], balances=[])
+        mock_get.return_value = {
+            "id": "712",
+            "companyName": "Guzman, Mirta",
+            "custentity_vom_winebrandname": "Laguzman",
+            "email": "owner@example.com",
+        }
+        mock_360.return_value = {
+            "email": "owner@example.com",
+            "stays": [],
+            "_errors": ["Pardot: disabled", "OPERA: disabled"],
+        }
+
+        r = lookup_wine_owner("Laguzman")
+
+        assert r["_errors"] == ["Pardot: disabled", "OPERA: disabled"]
+        assert r["enrichment_status"].startswith("partial:")
+        # And the usage-log classifier now sees it as degraded.
+        from src.tool_logging import _classify_result
+
+        assert _classify_result(r)[0] == "degraded"
+
+    @patch("src.wine_tools.guest_360")
+    @patch("src.wine_tools.rest_get")
+    @patch("src.wine_tools.suiteql_query")
+    def test_clean_enrichment_has_no_top_level_errors(self, mock_q, mock_get, mock_360):
+        candidates = [
+            {
+                "id": "712",
+                "entityid": "Guzman, Mirta",
+                "companyname": "Guzman, Mirta",
+                "brand": "Laguzman",
+                "owner_code": "GUZM",
+                "isinactive": "F",
+            },
+        ]
+        mock_q.side_effect = _fake_query(candidates=candidates, items=[], balances=[])
+        mock_get.return_value = {
+            "id": "712",
+            "companyName": "Guzman, Mirta",
+            "custentity_vom_winebrandname": "Laguzman",
+            "email": "owner@example.com",
+        }
+        mock_360.return_value = {"email": "owner@example.com", "stays": [], "_errors": []}
+
+        r = lookup_wine_owner("Laguzman")
+
+        assert "_errors" not in r
+        assert r["enrichment_status"] == "ok"
