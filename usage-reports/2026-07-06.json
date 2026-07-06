@@ -1,0 +1,81 @@
+{
+  "auth_split": {
+    "write": 4
+  },
+  "days": 7,
+  "generated_at": "2026-07-06T20:18:35.612282+00:00",
+  "per_client": [
+    {
+      "calls": 4,
+      "client": "francis.phan@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 1,
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "wine_owner_lookup"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-07-06": 4
+  },
+  "per_end_user": [],
+  "per_tool": [
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 1,
+      "p50_ms": 1129.0,
+      "p95_ms": 2145.1,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 854.0,
+      "p95_ms": 854.0,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 7786.0,
+      "p95_ms": 7786.0,
+      "tool": "wine_owner_lookup"
+    }
+  ],
+  "prev_totals": {
+    "calls": 0,
+    "degraded": 0,
+    "error": 0,
+    "error_rate": 0.0,
+    "ok": 0
+  },
+  "since": "2026-06-30T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 1,
+      "error": "SuiteQL does not support the SQL 'LIMIT' keyword (it is Oracle SQL) \u2014 'LIMIT n' fails with a syntax error near 'LIMIT'. Suggestion: Use 'FETCH FIRST n ROWS ONLY' for a top-N (e.g. '... ORDER BY t.trandate DESC FETCH FIRST 50 ROWS ONLY'), or pass the ns_suiteql_query 'limit' parameter, which paginate\u2026 (+14 chars)"
+    }
+  ],
+  "totals": {
+    "calls": 4,
+    "degraded": 0,
+    "error": 1,
+    "error_rate": 0.25,
+    "ok": 3
+  },
+  "until": "2026-07-06T20:18:35.612282+00:00"
+}
