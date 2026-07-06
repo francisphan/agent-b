@@ -396,6 +396,235 @@ class TestInstrumentStatus:
         assert "j***@vines.com" in record["error"]
 
 
+class TestUsageStoreMirror:
+    """_write_usage_record mirrors into usage_store — async on-loop, best-effort."""
+
+    async def _drain(self):
+        pending = list(tool_logging._pending_mirror_tasks)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    async def test_tool_call_mirrors_via_record_async_on_loop(self, usage_path, monkeypatch):
+        from src import usage_store
+
+        captured = []
+
+        async def fake_record_async(rec):
+            captured.append(rec)
+
+        # On the running loop the mirror must go through the async path, not the
+        # blocking sync record().
+        monkeypatch.setattr(usage_store, "record_async", fake_record_async)
+        monkeypatch.setattr(usage_store, "record", lambda rec: captured.append(("SYNC", rec)))
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        await mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"})
+        await self._drain()
+
+        assert len(captured) == 1
+        assert captured[0]["tool"] == "lookup"
+        assert captured[0]["status"] == "ok"
+
+    async def test_raising_mirror_does_not_break_call(self, usage_path, monkeypatch):
+        from src import usage_store
+
+        async def boom(_rec):
+            raise RuntimeError("redis blew up")
+
+        monkeypatch.setattr(usage_store, "record_async", boom)
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        result = await mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"})
+        await self._drain()  # let the failing task settle; must not surface
+
+        # Tool return is unchanged and the JSONL record was still written.
+        assert result == {"found": True, "email": "x@y.com"}
+        record = json.loads(usage_path.read_text().strip())
+        assert record["status"] == "ok"
+
+    def test_off_loop_uses_sync_record(self, usage_path, monkeypatch):
+        # No running loop (a plain call, e.g. CLI/tests): the sync path is used.
+        from src import usage_store
+
+        captured = []
+        monkeypatch.setattr(usage_store, "record", captured.append)
+        tool_logging._write_usage_record({"tool": "x", "status": "ok"})
+
+        assert captured == [{"tool": "x", "status": "ok"}]
+
+
+class _FakeUser:
+    """Stands in for Starlette's AuthenticatedUser on the request scope."""
+
+    def __init__(self, access_token):
+        self.access_token = access_token
+
+
+class _FakeRequest:
+    def __init__(self, headers, user=None):
+        self.headers = headers
+        self.scope = {"user": user} if user is not None else {}
+
+
+class TestClientAttribution:
+    """client/end_user resolution off the live request, honoring the trust rule."""
+
+    def _call_with_request(self, mcp, *, headers, user):
+        from mcp.server.lowlevel.server import request_ctx
+        from mcp.shared.context import RequestContext
+
+        req = _FakeRequest(headers, user)
+        token = request_ctx.set(RequestContext("r1", None, None, None, request=req))
+        try:
+            asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
+        finally:
+            request_ctx.reset(token)
+
+    def _record(self, usage_path):
+        return json.loads(usage_path.read_text().strip())
+
+    def test_static_client_records_end_user(self, usage_path):
+        from mcp.server.auth.provider import AccessToken
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        user = _FakeUser(AccessToken(token="t", client_id="static-write", scopes=["agent-b:read"]))
+        self._call_with_request(mcp, headers={"x-end-user": "U06L80JUUD6"}, user=user)
+
+        rec = self._record(usage_path)
+        assert rec["client"] == "sabueso"
+        assert rec["end_user"] == "U06L80JUUD6"
+
+    def test_oauth_client_ignores_end_user_header(self, usage_path):
+        from mcp.server.auth.provider import AccessToken
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        user = _FakeUser(
+            AccessToken(
+                token="t",
+                client_id="claude-desktop-1",
+                scopes=["agent-b:read"],
+                subject="alice@vines.com",
+            )
+        )
+        self._call_with_request(mcp, headers={"x-end-user": "U06L80JUUD6"}, user=user)
+
+        rec = self._record(usage_path)
+        # The caller IS the OAuth email; a spoofed X-End-User is not trusted.
+        assert rec["client"] == "alice@vines.com"
+        assert rec["end_user"] is None
+
+    def test_static_client_without_header_has_no_end_user(self, usage_path):
+        from mcp.server.auth.provider import AccessToken
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        user = _FakeUser(AccessToken(token="t", client_id="static-read", scopes=["agent-b:read"]))
+        self._call_with_request(mcp, headers={}, user=user)
+
+        rec = self._record(usage_path)
+        assert rec["client"] == "s2s-read"
+        assert rec["end_user"] is None
+
+    def test_falls_back_to_caller_contextvar_without_request_user(self, usage_path):
+        from src.auth import CALLER
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        cv = CALLER.set("sabueso")
+        try:
+            self._call_with_request(mcp, headers={"x-end-user": "U123"}, user=None)
+        finally:
+            CALLER.reset(cv)
+
+        rec = self._record(usage_path)
+        # No authenticated user on the request → CALLER fallback; still a static
+        # client, so the end-user header is honored.
+        assert rec["client"] == "sabueso"
+        assert rec["end_user"] == "U123"
+
+    def test_no_oauth_write_bearer_resolves_to_sabueso(self, usage_path, monkeypatch):
+        # Static-token mode: no scope['user'], so the caller is recovered from
+        # the request's bearer (CALLER contextvar wouldn't cross the task boundary).
+        import src.auth
+
+        monkeypatch.setattr(src.auth, "WRITE_TOKEN", "w-secret")
+        monkeypatch.setattr(src.auth, "READ_TOKEN", "r-secret")
+        mcp = _build_mcp()
+        instrument(mcp)
+        self._call_with_request(
+            mcp, headers={"authorization": "Bearer w-secret", "x-end-user": "U9"}, user=None
+        )
+        rec = self._record(usage_path)
+        assert rec["client"] == "sabueso"
+        assert rec["end_user"] == "U9"
+
+    def test_no_oauth_read_bearer_resolves_to_s2s_read(self, usage_path, monkeypatch):
+        import src.auth
+
+        monkeypatch.setattr(src.auth, "WRITE_TOKEN", None)
+        monkeypatch.setattr(src.auth, "READ_TOKEN", "r-secret")
+        mcp = _build_mcp()
+        instrument(mcp)
+        self._call_with_request(mcp, headers={"authorization": "Bearer r-secret"}, user=None)
+        assert self._record(usage_path)["client"] == "s2s-read"
+
+    def test_no_oauth_unknown_bearer_is_anonymous(self, usage_path, monkeypatch):
+        import src.auth
+        from src.auth import CALLER
+
+        monkeypatch.setattr(src.auth, "WRITE_TOKEN", "w-secret")
+        monkeypatch.setattr(src.auth, "READ_TOKEN", "r-secret")
+        cv = CALLER.set("anonymous")
+        try:
+            mcp = _build_mcp()
+            instrument(mcp)
+            self._call_with_request(mcp, headers={"authorization": "Bearer nope"}, user=None)
+        finally:
+            CALLER.reset(cv)
+        assert self._record(usage_path)["client"] == "anonymous"
+
+    def test_malformed_end_user_is_dropped(self, usage_path):
+        # An email is not a valid id (has "@") → dropped, keeping PII out of logs.
+        from mcp.server.auth.provider import AccessToken
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        user = _FakeUser(AccessToken(token="t", client_id="static-write", scopes=["agent-b:read"]))
+        self._call_with_request(mcp, headers={"x-end-user": "evil@example.com"}, user=user)
+        rec = self._record(usage_path)
+        assert rec["client"] == "sabueso"
+        assert rec["end_user"] is None
+
+    def test_crlf_end_user_is_dropped(self, usage_path):
+        # Log-injection attempt (CR/LF) → dropped.
+        from mcp.server.auth.provider import AccessToken
+
+        mcp = _build_mcp()
+        instrument(mcp)
+        user = _FakeUser(AccessToken(token="t", client_id="static-write", scopes=["agent-b:read"]))
+        self._call_with_request(mcp, headers={"x-end-user": "U1\r\ninjected"}, user=user)
+        assert self._record(usage_path)["end_user"] is None
+
+    def test_caller_context_swallows_resolution_errors(self, usage_path, monkeypatch):
+        # If caller resolution blows up, the call still succeeds and records
+        # anonymous (the resolution runs outside the dispatcher's own try guard).
+        def _boom():
+            raise RuntimeError("scope shape changed")
+
+        monkeypatch.setattr(tool_logging, "_caller_from_request", _boom)
+        mcp = _build_mcp()
+        instrument(mcp)
+        result = asyncio.run(mcp._tool_manager.call_tool("lookup", {"email": "x@y.com"}))
+        assert result == {"found": True, "email": "x@y.com"}
+        rec = self._record(usage_path)
+        assert rec["client"] == "anonymous"
+        assert rec["end_user"] is None
+
+
 @pytest.fixture
 def restore_log_levels():
     """Snapshot and restore levels the configure_logging tests mutate."""

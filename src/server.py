@@ -1,9 +1,11 @@
 """Agent B — MCP server exposing Salesforce, NetSuite, and Pardot tools."""
 
+import asyncio
 import hmac
 import json
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -13,10 +15,12 @@ from pydantic import AnyHttpUrl
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from src.auth import ALLOW_INSECURE_NO_AUTH, AUTH_LEVEL, READ_TOKEN, WRITE_TOKEN
+from src import usage_store
+from src.auth import ALLOW_INSECURE_NO_AUTH, AUTH_LEVEL, CALLER, READ_TOKEN, WRITE_TOKEN
 from src.oauth_callback import make_oauth_callback_route
 from src.oauth_provider import GoogleOAuthProvider, READ_SCOPE
 from src.tool_logging import configure_logging, instrument
+from src.usage_report import weekly_report
 
 load_dotenv()
 configure_logging()
@@ -77,6 +81,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
             # granted when the operator explicitly opts in for local dev.
             if ALLOW_INSECURE_NO_AUTH:
                 AUTH_LEVEL.set("write")
+                CALLER.set("anonymous")
                 return await call_next(request)
             return JSONResponse(
                 {"error": "Server authentication is not configured."}, status_code=503
@@ -86,10 +91,12 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
 
         if WRITE_TOKEN and hmac.compare_digest(bearer, WRITE_TOKEN):
             AUTH_LEVEL.set("write")
+            CALLER.set("sabueso")
             return await call_next(request)
 
         if READ_TOKEN and hmac.compare_digest(bearer, READ_TOKEN):
             AUTH_LEVEL.set("read")
+            CALLER.set("s2s-read")
             return await call_next(request)
 
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
@@ -121,6 +128,79 @@ mcp = FastMCP("Agent B", **_fastmcp_kwargs)
 @mcp.custom_route("/health", methods=["GET"])
 async def health(request):
     return JSONResponse({"status": "ok"})
+
+
+def _usage_report_authorized(request) -> bool:
+    """Bearer check for /usage/report. Fails CLOSED.
+
+    Custom Starlette routes are NOT behind any auth middleware: the SDK's
+    RequireAuthMiddleware wraps only the MCP route, and BearerAuthMiddleware is
+    mounted only in the no-OAuth path. So this route must guard itself. It
+    accepts MCP_WRITE_TOKEN *or* MCP_API_TOKEN. Critically, when no static token
+    is configured we allow ONLY if OAuth is also unconfigured (true local dev):
+    otherwise an OAuth-mode deploy with the static tokens removed would serve the
+    report — emails, Slack ids — to anyone. Reads module-level tokens/provider so
+    tests can monkeypatch them.
+    """
+    bearer = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if WRITE_TOKEN and hmac.compare_digest(bearer, WRITE_TOKEN):
+        return True
+    if READ_TOKEN and hmac.compare_digest(bearer, READ_TOKEN):
+        return True
+    # No static-token match. Only open when nothing could authenticate anyway:
+    # no static tokens AND no OAuth provider mounted (local dev).
+    return not READ_TOKEN and not WRITE_TOKEN and _oauth_provider is None
+
+
+@mcp.custom_route("/usage/report", methods=["GET"])
+async def usage_report_route(request):
+    """Serve the weekly tool-usage report as JSON (bearer-protected).
+
+    Consumed by the usage-report GitHub Actions cron. ``days`` (default 7,
+    clamped to 1..30) sets the window as ``days`` whole UTC calendar days ending
+    today, so the report's day axis and headline totals cover the same span
+    (a rolling-seconds window would leave a leading partial day out of the bars).
+    The immediately preceding, same-length, same-aligned window is returned as
+    ``prev_totals`` for week-over-week context. Reads the Redis usage mirror in a
+    worker thread (the sync client mustn't block the loop) — on a store outage
+    returns 503 rather than a misleadingly-empty report.
+    """
+    if not _usage_report_authorized(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    try:
+        days = int(request.query_params.get("days", "7"))
+    except (TypeError, ValueError):
+        days = 7
+    days = max(1, min(30, days))
+
+    # Floor the window start to UTC midnight so it aligns with the calendar-day
+    # axis the email renders. The window is `days` whole days ending today.
+    now_dt = datetime.now(timezone.utc)
+    start_date = now_dt.date() - timedelta(days=days - 1)
+    since_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
+    since_ts = since_dt.timestamp()
+    prev_since_ts = since_ts - days * 86400  # exactly adjacent, same alignment
+
+    try:
+        # One read covering both windows (in a thread — sync client); split below.
+        everything = await asyncio.to_thread(usage_store.fetch, prev_since_ts)
+    except Exception as exc:
+        return JSONResponse({"error": f"usage store unavailable: {exc}"}, status_code=503)
+
+    records = [
+        r for r in everything if isinstance(r.get("ts"), (int, float)) and r["ts"] >= since_ts
+    ]
+    prev_records = [
+        r for r in everything if isinstance(r.get("ts"), (int, float)) and r["ts"] < since_ts
+    ]
+
+    report = weekly_report(records, prev_records)
+    report["days"] = days
+    report["generated_at"] = now_dt.isoformat()
+    report["since"] = since_dt.isoformat()
+    report["until"] = now_dt.isoformat()
+    return JSONResponse(report)
 
 
 if _oauth_provider is not None:

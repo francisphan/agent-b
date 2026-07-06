@@ -19,6 +19,7 @@ import json
 import os
 import sys
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -181,6 +182,137 @@ def _aggregate_turns(records: list[dict]) -> dict[str, Any]:
             "max": max(calls_per_turn) if calls_per_turn else None,
         },
         "items": items,
+    }
+
+
+def _per_day_counts(records: list[dict]) -> dict[str, int]:
+    """Count calls per UTC calendar day, keyed by ISO date (YYYY-MM-DD).
+
+    Uses the epoch float ``ts`` that :mod:`src.usage_store` stamps on each
+    mirrored record. Records without a numeric ``ts`` are skipped. The result is
+    sorted by date so the email renderer can lay days out left-to-right.
+    """
+    counts: Counter = Counter()
+    for r in records:
+        ts = r.get("ts")
+        if not isinstance(ts, (int, float)):
+            continue
+        day = datetime.fromtimestamp(ts, tz=timezone.utc).date().isoformat()
+        counts[day] += 1
+    return dict(sorted(counts.items()))
+
+
+def _top_tools(records: list[dict], n: int = 3) -> list[dict]:
+    """The ``n`` most-called tools in ``records`` as ``[{tool, calls}]``."""
+    counts: Counter = Counter(r.get("tool", "?") for r in records)
+    return [{"tool": tool, "calls": calls} for tool, calls in counts.most_common(n)]
+
+
+def _per_client(records: list[dict]) -> list[dict]:
+    """Per-calling-client rollup: who is calling and their busiest tools.
+
+    ``client`` is the usage-attribution label stamped by tool_logging (Sabueso,
+    an s2s reader, or an OAuth user's email). Sorted by call volume descending.
+    """
+    by_client: dict[str, list[dict]] = defaultdict(list)
+    for r in records:
+        by_client[r.get("client") or "anonymous"].append(r)
+    out = [
+        {
+            "client": client,
+            "calls": len(recs),
+            "errors": sum(1 for r in recs if r.get("status") == "error"),
+            "degraded": sum(1 for r in recs if r.get("status") == "degraded"),
+            "top_tools": _top_tools(recs, 3),
+        }
+        for client, recs in by_client.items()
+    ]
+    out.sort(key=lambda c: c["calls"], reverse=True)
+    return out
+
+
+def _per_end_user(records: list[dict]) -> list[dict]:
+    """Per-end-user rollup for calls made through a shared static credential.
+
+    Groups every record that carries an ``end_user`` (a Slack user id the bot
+    forwards). tool_logging only records ``end_user`` for static-token callers
+    (Sabueso and s2s-read — an OAuth user can't set it), so grouping on the field
+    itself — rather than hard-filtering ``client == "sabueso"`` — surfaces all of
+    them instead of silently dropping s2s-read rows. Sorted by volume descending.
+    """
+    by_user: dict[str, list[dict]] = defaultdict(list)
+    for r in records:
+        if r.get("end_user"):
+            by_user[r["end_user"]].append(r)
+    out = [
+        {"end_user": user, "calls": len(recs), "top_tools": _top_tools(recs, 3)}
+        for user, recs in by_user.items()
+    ]
+    out.sort(key=lambda u: u["calls"], reverse=True)
+    return out
+
+
+def weekly_report(records: list[dict], prev_records: list[dict]) -> dict[str, Any]:
+    """Summarise a week of usage for the HTML email, with week-over-week context.
+
+    Reuses :func:`aggregate` for the shared heavy lifting (per-tool p50/p95, auth
+    split) and adds the week-specific shape the renderer needs: per-day call
+    counts, a trimmed per-tool table that also carries a per-tool ``degraded``
+    count (which :func:`aggregate` doesn't track), a top-errors list, and the
+    previous window's totals for the WoW delta.
+
+    Both ``records`` and ``prev_records`` are the Redis-mirror shape: each record
+    carries an epoch float ``ts`` (see :mod:`src.usage_store`), which
+    :func:`_per_day_counts` turns into UTC ISO dates. ``aggregate`` itself is
+    untouched and still consumes the ISO-``ts`` JSONL shape for the CLI report.
+    """
+    stats = aggregate(records)
+    prev = aggregate(prev_records)
+
+    def _totals(s: dict) -> dict:
+        return {
+            "calls": s["total"],
+            "ok": s["ok"],
+            "error": s["errors"],
+            "degraded": s["degraded"],
+            "error_rate": s["error_rate"],
+        }
+
+    # aggregate()'s per-tool rows don't carry a degraded count; add it from the
+    # raw records and trim each row to the fields the email needs.
+    degraded_by_tool: Counter = Counter(
+        r.get("tool", "?") for r in records if r.get("status") == "degraded"
+    )
+    per_tool = [
+        {
+            "tool": t["tool"],
+            "calls": t["calls"],
+            "errors": t["errors"],
+            "degraded": degraded_by_tool.get(t["tool"], 0),
+            "p50_ms": t["p50_ms"],
+            "p95_ms": t["p95_ms"],
+        }
+        for t in stats["tools"]
+    ]
+
+    # The masked error snippet recorded on error/degraded calls, tallied. Already
+    # PII-masked server-side (see tool_logging._clip_error), so safe to surface.
+    error_tally: Counter = Counter(
+        r["error"] for r in records if r.get("status") in ("error", "degraded") and r.get("error")
+    )
+    top_errors = [
+        {"error": snippet, "count": count} for snippet, count in error_tally.most_common(5)
+    ]
+
+    return {
+        "totals": _totals(stats),
+        "prev_totals": _totals(prev),
+        "per_day": _per_day_counts(records),
+        "per_tool": per_tool,
+        "auth_split": stats["by_auth"],
+        "top_errors": top_errors,
+        "per_client": _per_client(records),
+        "per_end_user": _per_end_user(records),
     }
 
 

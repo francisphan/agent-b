@@ -10,6 +10,7 @@ import pytest
 from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl
 
+from src.auth import CALLER
 from src.oauth_provider import (
     JWT_ALGORITHM,
     JWT_AUDIENCE,
@@ -20,6 +21,16 @@ from src.oauth_provider import (
 
 
 SIGNING_KEY = "k" * 48
+
+
+@pytest.fixture
+def reset_caller():
+    """Isolate the CALLER contextvar so load_access_token's writes don't leak."""
+    token = CALLER.set("anonymous")
+    try:
+        yield
+    finally:
+        CALLER.reset(token)
 
 
 def make_provider(**overrides) -> GoogleOAuthProvider:
@@ -333,3 +344,36 @@ class TestRefreshTokenFlow:
         second = await provider.exchange_refresh_token(client, loaded_rt, [])
         loaded_access = await provider.load_access_token(second.access_token)
         assert loaded_access.scopes == [READ_SCOPE]
+
+
+class TestCallerAttribution:
+    """load_access_token stamps CALLER (and subject) for usage attribution."""
+
+    async def test_static_write_is_sabueso(self, reset_caller):
+        provider = make_provider()
+        token = await provider.load_access_token("write-secret")
+        assert token.client_id == "static-write"
+        assert CALLER.get() == "sabueso"
+
+    async def test_static_read_is_s2s_read(self, reset_caller):
+        provider = make_provider()
+        await provider.load_access_token("read-only-secret")
+        assert CALLER.get() == "s2s-read"
+
+    async def test_oauth_user_is_email_and_subject_is_populated(self, reset_caller):
+        provider = make_provider()
+        minted = await provider._mint_token_pair(
+            client_id="claude-desktop-1",
+            email="alice@vinesofmendoza.com",
+            scopes=[READ_SCOPE, WRITE_SCOPE],
+        )
+        loaded = await provider.load_access_token(minted.access_token)
+        # The email now rides on AccessToken.subject so the dispatcher can read
+        # it off the live request, and CALLER mirrors it.
+        assert loaded.subject == "alice@vinesofmendoza.com"
+        assert CALLER.get() == "alice@vinesofmendoza.com"
+
+    async def test_invalid_token_leaves_caller_untouched(self, reset_caller):
+        provider = make_provider()
+        assert await provider.load_access_token("not-a-token") is None
+        assert CALLER.get() == "anonymous"

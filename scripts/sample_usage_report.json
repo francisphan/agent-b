@@ -1,0 +1,107 @@
+{
+  "days": 7,
+  "generated_at": "2026-07-06T11:00:03.512000+00:00",
+  "since": "2026-06-30T00:00:00+00:00",
+  "until": "2026-07-06T11:00:03+00:00",
+  "totals": {
+    "calls": 84,
+    "ok": 78,
+    "error": 4,
+    "degraded": 2,
+    "error_rate": 0.047619047619047616
+  },
+  "prev_totals": {
+    "calls": 71,
+    "ok": 68,
+    "error": 2,
+    "degraded": 1,
+    "error_rate": 0.028169014084507043
+  },
+  "per_day": {
+    "2026-06-30": 9,
+    "2026-07-01": 14,
+    "2026-07-02": 11,
+    "2026-07-03": 18,
+    "2026-07-04": 6,
+    "2026-07-05": 4,
+    "2026-07-06": 22
+  },
+  "per_tool": [
+    {"tool": "guest_360_profile", "calls": 26, "errors": 1, "degraded": 2, "p50_ms": 820, "p95_ms": 2140},
+    {"tool": "sf_soql_query", "calls": 22, "errors": 0, "degraded": 0, "p50_ms": 140, "p95_ms": 420},
+    {"tool": "lookup_guest_by_email", "calls": 14, "errors": 1, "degraded": 0, "p50_ms": 260, "p95_ms": 610},
+    {"tool": "ns_suiteql_query", "calls": 12, "errors": 2, "degraded": 0, "p50_ms": 190, "p95_ms": 980},
+    {"tool": "person_brief", "calls": 6, "errors": 0, "degraded": 0, "p50_ms": 540, "p95_ms": 1120},
+    {"tool": "wine_owner_lookup", "calls": 4, "errors": 0, "degraded": 0, "p50_ms": 300, "p95_ms": 700}
+  ],
+  "auth_split": {
+    "read": 80,
+    "write": 4
+  },
+  "top_errors": [
+    {"error": "NetSuite 400: Invalid search query", "count": 2},
+    {"error": "OPERA: leg unavailable (opera-pms-api tunnel down)", "count": 2},
+    {"error": "Salesforce: no record for j***@vines.com", "count": 1},
+    {"error": "ns_suiteql_query timed out after 30s", "count": 1}
+  ],
+  "per_client": [
+    {
+      "client": "sabueso",
+      "calls": 72,
+      "errors": 4,
+      "degraded": 2,
+      "top_tools": [
+        {"tool": "guest_360_profile", "calls": 24},
+        {"tool": "sf_soql_query", "calls": 20},
+        {"tool": "lookup_guest_by_email", "calls": 14}
+      ]
+    },
+    {
+      "client": "fs.phan@gmail.com",
+      "calls": 8,
+      "errors": 0,
+      "degraded": 0,
+      "top_tools": [
+        {"tool": "sf_soql_query", "calls": 5},
+        {"tool": "person_brief", "calls": 3}
+      ]
+    },
+    {
+      "client": "s2s-read",
+      "calls": 4,
+      "errors": 0,
+      "degraded": 0,
+      "top_tools": [
+        {"tool": "wine_owner_lookup", "calls": 4}
+      ]
+    }
+  ],
+  "per_end_user": [
+    {
+      "end_user": "U06L80JUUD6",
+      "calls": 40,
+      "top_tools": [
+        {"tool": "guest_360_profile", "calls": 16},
+        {"tool": "sf_soql_query", "calls": 14},
+        {"tool": "lookup_guest_by_email", "calls": 10}
+      ]
+    },
+    {
+      "end_user": "U08ABCD1234",
+      "calls": 22,
+      "top_tools": [
+        {"tool": "guest_360_profile", "calls": 8},
+        {"tool": "person_brief", "calls": 8},
+        {"tool": "ns_suiteql_query", "calls": 6}
+      ]
+    },
+    {
+      "end_user": "U03ZZQWERTY",
+      "calls": 10,
+      "top_tools": [
+        {"tool": "sf_soql_query", "calls": 6},
+        {"tool": "wine_owner_lookup", "calls": 4}
+      ]
+    }
+  ]
+}

@@ -19,6 +19,8 @@ at a mounted volume if you need the JSONL to survive redeploys.
 
 from __future__ import annotations
 
+import asyncio
+import hmac
 import json
 import logging
 import os
@@ -46,6 +48,12 @@ correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=No
 
 # Cap to keep a hostile/garbage header out of the logs unbounded.
 _MAX_CORRELATION_ID = 64
+
+# X-End-User is caller-supplied, so validate rather than merely length-cap it:
+# accept a conservative id charset (covers Slack ids like U06L80JUUD6) with no
+# "@", whitespace, or control chars — keeps emails/PII and CR/LF log-injection
+# out of the logs, Redis, and the report. Anything else is dropped.
+_END_USER_RE = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 
 
 def _correlation_from_request() -> str | None:
@@ -81,6 +89,110 @@ def _correlation_from_request() -> str | None:
         return None
     cid = headers.get("x-correlation-id")
     return cid[:_MAX_CORRELATION_ID] if cid else None
+
+
+def _active_request() -> Any:
+    """Return the Starlette request hung off the SDK's request_ctx, or None.
+
+    Shared by the caller/end-user readers below. Same reliable source as
+    _correlation_from_request: it lives on the task that dispatches the tool
+    handler, unlike an ASGI-middleware contextvar. Returns None off the HTTP
+    path (e.g. stdio) or before request_ctx is set.
+    """
+    try:
+        from mcp.server.lowlevel.server import request_ctx
+    except Exception:  # pragma: no cover - SDK layout change
+        return None
+    try:
+        ctx = request_ctx.get()
+    except LookupError:
+        return None
+    return getattr(ctx, "request", None)
+
+
+def _caller_from_request() -> str | None:
+    """Resolve the caller label off the live request.
+
+    Two paths, both read off the request (reliable across the streamable-http
+    task boundary, unlike a contextvar):
+
+    1. OAuth mode — the SDK stores whatever ``load_access_token`` returned on
+       ``request.scope["user"].access_token`` (an ``AccessToken``), with the
+       OAuth email hung on its ``subject``.
+    2. No-OAuth (static-token) mode — the SDK auth middleware isn't mounted, so
+       there is no ``scope["user"]``; recover the caller by matching the request's
+       bearer against the static tokens (BearerAuthMiddleware's CALLER contextvar
+       set in the ASGI task doesn't reach this dispatch task — the corr bug).
+
+    Returns None when neither path resolves, leaving the CALLER contextvar as the
+    last-resort fallback.
+    """
+    request = _active_request()
+    if request is None:
+        return None
+
+    scope = getattr(request, "scope", None)
+    user = scope.get("user") if hasattr(scope, "get") else None
+    token = getattr(user, "access_token", None)
+    if token is not None:
+        from src.auth import caller_label
+
+        return caller_label(getattr(token, "client_id", None), getattr(token, "subject", None))
+
+    # No authenticated user on the scope → static-token mode. Match the bearer.
+    headers = getattr(request, "headers", None)
+    if not headers:
+        return None
+    from src.auth import READ_TOKEN, WRITE_TOKEN
+
+    bearer = headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not bearer:
+        return None
+    if WRITE_TOKEN and hmac.compare_digest(bearer, WRITE_TOKEN):
+        return "sabueso"
+    if READ_TOKEN and hmac.compare_digest(bearer, READ_TOKEN):
+        return "s2s-read"
+    return None
+
+
+def _end_user_from_request() -> str | None:
+    """Read and validate the optional X-End-User header off the live request.
+
+    Sabueso sets this to the originating Slack user id so per-end-user usage can
+    be attributed under the shared bot credential. The value is caller-supplied,
+    so it's validated against ``_END_USER_RE`` and dropped if it doesn't match.
+    """
+    request = _active_request()
+    headers = getattr(request, "headers", None)
+    if not headers:
+        return None
+    eu = headers.get("x-end-user")
+    return eu if eu and _END_USER_RE.match(eu) else None
+
+
+def _caller_context() -> tuple[str, str | None]:
+    """Resolve ``(client, end_user)`` for a tool call. Never raises.
+
+    ``client`` prefers the live-request read and falls back to the CALLER
+    contextvar (set at auth time), then "anonymous". ``end_user`` is only
+    trusted for static-token clients (Sabueso / s2s): an OAuth user shouldn't be
+    able to spoof attribution rows, and their identity is already their email.
+
+    Wrapped in a catch-all: this runs on the tool-call path (outside the
+    dispatcher's own try), so an unexpected scope/token shape must degrade to
+    ("anonymous", None) rather than break the call.
+    """
+    try:
+        from src.auth import CALLER, STATIC_CALLERS
+
+        client = _caller_from_request() or CALLER.get()
+        end_user = _end_user_from_request()
+        if not (end_user and client in STATIC_CALLERS):
+            end_user = None
+        return client, end_user
+    except Exception:  # pragma: no cover - attribution must never break a call
+        logger.debug("Caller attribution failed; recording anonymous", exc_info=True)
+        return "anonymous", None
 
 
 # Per-string-value cap so a giant query or note can't bloat the logs.
@@ -296,6 +408,51 @@ def _write_usage_record(record: dict) -> None:
     except Exception:  # pragma: no cover - logging must never break a tool call
         logger.debug("Could not write tool-usage record", exc_info=True)
 
+    _mirror_usage_record(record)
+
+
+# Fired-and-forgotten mirror tasks are parked here so the loop keeps a strong
+# reference (an unreferenced task can be GC'd mid-flight) and their exceptions
+# are retrieved. Discarded when each completes.
+_pending_mirror_tasks: set = set()
+
+
+def _on_mirror_done(task: asyncio.Task) -> None:
+    _pending_mirror_tasks.discard(task)
+    if not task.cancelled():
+        task.exception()  # retrieve so it's not reported as "never retrieved"
+
+
+def _mirror_usage_record(record: dict) -> None:
+    """Mirror one record into the Redis usage store. Best-effort; never blocks.
+
+    On the async tool-call path (a running loop) the write is fired-and-forgotten
+    via ``record_async`` so a slow/unreachable Redis can't stall the event loop.
+    Off-loop callers (the CLI, unit tests) fall back to the synchronous
+    ``record``. Every failure mode — import hiccup, no loop, Redis down — is
+    swallowed: the mirror must never break or delay a real tool call.
+    """
+    try:
+        from src import usage_store
+    except Exception:  # pragma: no cover - mirror must never break a tool call
+        logger.debug("Could not import usage_store for mirroring", exc_info=True)
+        return
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    try:
+        if loop is not None:
+            task = loop.create_task(usage_store.record_async(record))
+            _pending_mirror_tasks.add(task)
+            task.add_done_callback(_on_mirror_done)
+        else:
+            usage_store.record(record)
+    except Exception:  # pragma: no cover - mirror must never break a tool call
+        logger.debug("Could not mirror tool-usage record to store", exc_info=True)
+
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     """Read X-Correlation-ID off each request into a contextvar (fallback only).
@@ -432,6 +589,9 @@ def instrument(mcp) -> None:
         corr = _correlation_from_request()
         if corr is None:
             corr = correlation_id.get()
+        # Who is calling (Sabueso / s2s / an OAuth email) and, for static clients
+        # only, the end user they're acting for (e.g. a Slack user id).
+        client, end_user = _caller_context()
         redacted_args = redact(arguments) if isinstance(arguments, dict) else arguments
         try:
             result = await original_call_tool(name, arguments, *args, **kwargs)
@@ -441,10 +601,12 @@ def instrument(mcp) -> None:
             # would otherwise leak the exact PII _clip_error exists to prevent.
             exc_snippet = _clip_error(str(exc))
             logger.info(
-                "tool=%s corr=%s auth=%s status=error dur=%dms error=%s: %s | args=%s",
+                "tool=%s corr=%s auth=%s client=%s end_user=%s status=error dur=%dms error=%s: %s | args=%s",
                 name,
                 corr,
                 auth,
+                client,
+                end_user,
                 duration_ms,
                 type(exc).__name__,
                 exc_snippet,
@@ -457,6 +619,8 @@ def instrument(mcp) -> None:
                     "tool": name,
                     "corr": corr,
                     "auth": auth,
+                    "client": client,
+                    "end_user": end_user,
                     "status": "error",
                     "duration_ms": duration_ms,
                     "error_type": type(exc).__name__,
@@ -474,20 +638,24 @@ def instrument(mcp) -> None:
         size_str = size if size is not None else "?"
         if status == "ok":
             logger.info(
-                "tool=%s corr=%s auth=%s status=ok dur=%dms result=%sB | args=%s",
+                "tool=%s corr=%s auth=%s client=%s end_user=%s status=ok dur=%dms result=%sB | args=%s",
                 name,
                 corr,
                 auth,
+                client,
+                end_user,
                 duration_ms,
                 size_str,
                 redacted_args,
             )
         else:
             logger.info(
-                "tool=%s corr=%s auth=%s status=%s dur=%dms result=%sB error=%s | args=%s",
+                "tool=%s corr=%s auth=%s client=%s end_user=%s status=%s dur=%dms result=%sB error=%s | args=%s",
                 name,
                 corr,
                 auth,
+                client,
+                end_user,
                 status,
                 duration_ms,
                 size_str,
@@ -500,6 +668,8 @@ def instrument(mcp) -> None:
             "tool": name,
             "corr": corr,
             "auth": auth,
+            "client": client,
+            "end_user": end_user,
             "status": status,
             "duration_ms": duration_ms,
             "result_bytes": size,
