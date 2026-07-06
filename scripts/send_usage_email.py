@@ -290,13 +290,14 @@ def _clients_table(report: dict) -> str:
 
     rows = []
     for c in clients:
-        name = _client_display(c.get("client", "anonymous"))
+        name = _esc(_client_display(c.get("client", "anonymous")))
         tools = _tools_summary(c.get("top_tools", []))
+        bar = _bar(_pct(c.get("calls", 0), peak), ACCENT)
         rows.append(
             "<tr>"
             f'<td style="font-size:13px;color:{INK};font-weight:600;padding:8px 8px 8px 0;'
-            f'white-space:nowrap;">{_esc(name)}</td>'
-            f'<td style="padding:8px;width:34%;">{_bar(_pct(c.get("calls", 0), peak), ACCENT)}</td>'
+            f'white-space:nowrap;">{name}</td>'
+            f'<td style="padding:8px;width:34%;">{bar}</td>'
             f'<td style="text-align:right;font-size:13px;color:{INK};font-weight:600;'
             f'padding:8px;">{c.get("calls", 0)}</td>'
             f'<td style="font-size:12px;color:{MUTED};padding:8px 0 8px 8px;">{tools}</td>'
@@ -305,11 +306,13 @@ def _clients_table(report: dict) -> str:
         if c.get("client") == "sabueso":
             for u in end_users:
                 utools = _tools_summary(u.get("top_tools", []))
+                ubar = _bar(_pct(u.get("calls", 0), sabueso_calls), BAR, 8)
+                eu = _esc(u.get("end_user", ""))
                 rows.append(
                     "<tr>"
                     f'<td style="font-size:12px;color:{MUTED};padding:4px 8px 4px 16px;'
-                    f'white-space:nowrap;font-family:monospace;">↳ {_esc(u.get("end_user", ""))}</td>'
-                    f'<td style="padding:4px 8px;">{_bar(_pct(u.get("calls", 0), sabueso_calls), BAR, 8)}</td>'
+                    f'white-space:nowrap;font-family:monospace;">↳ {eu}</td>'
+                    f'<td style="padding:4px 8px;">{ubar}</td>'
                     f'<td style="text-align:right;font-size:12px;color:{MUTED};'
                     f'padding:4px 8px;">{u.get("calls", 0)}</td>'
                     f'<td style="font-size:11px;color:{MUTED};padding:4px 0 4px 8px;">{utools}</td>'
@@ -419,11 +422,24 @@ def render_text(report: dict) -> str:
 # ---------------------------------------------------------------------------
 # Network: fetch the report and send via Gmail
 # ---------------------------------------------------------------------------
+def _raise_for_status(resp, what: str) -> None:
+    """raise_for_status, but print the status + a body excerpt first.
+
+    The workflow fails visibly on a non-zero exit; this makes the *why* (a 401
+    from a stale token, a 4xx from Gmail) legible in the run log instead of a
+    bare stack trace.
+    """
+    if resp.status_code >= 400:
+        body = (resp.text or "")[:500]
+        print(f"{what} failed: HTTP {resp.status_code} — {body}", file=sys.stderr)
+    resp.raise_for_status()
+
+
 def fetch_report(base_url: str, token: str | None, days: int) -> dict:
     url = base_url.rstrip("/") + "/usage/report"
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     resp = requests.get(url, params={"days": days}, headers=headers, timeout=60)
-    resp.raise_for_status()
+    _raise_for_status(resp, "Fetching usage report")
     return resp.json()
 
 
@@ -438,7 +454,7 @@ def get_access_token(client_id: str, client_secret: str, refresh_token: str) -> 
         },
         timeout=30,
     )
-    resp.raise_for_status()
+    _raise_for_status(resp, "Gmail token refresh")
     return resp.json()["access_token"]
 
 
@@ -462,7 +478,7 @@ def send_email(access_token: str, raw: str) -> dict:
         json={"raw": raw},
         timeout=30,
     )
-    resp.raise_for_status()
+    _raise_for_status(resp, "Gmail send")
     return resp.json()
 
 

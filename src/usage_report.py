@@ -231,16 +231,18 @@ def _per_client(records: list[dict]) -> list[dict]:
     return out
 
 
-def _per_end_user(records: list[dict], client: str = "sabueso") -> list[dict]:
-    """Per-end-user rollup under a single client (the Sabueso bot by default).
+def _per_end_user(records: list[dict]) -> list[dict]:
+    """Per-end-user rollup for calls made through a shared static credential.
 
-    Only records that carry an ``end_user`` (a Slack user id the bot forwards)
-    for the given client are grouped; everything else is ignored. Sorted by
-    volume descending.
+    Groups every record that carries an ``end_user`` (a Slack user id the bot
+    forwards). tool_logging only records ``end_user`` for static-token callers
+    (Sabueso and s2s-read — an OAuth user can't set it), so grouping on the field
+    itself — rather than hard-filtering ``client == "sabueso"`` — surfaces all of
+    them instead of silently dropping s2s-read rows. Sorted by volume descending.
     """
     by_user: dict[str, list[dict]] = defaultdict(list)
     for r in records:
-        if r.get("client") == client and r.get("end_user"):
+        if r.get("end_user"):
             by_user[r["end_user"]].append(r)
     out = [
         {"end_user": user, "calls": len(recs), "top_tools": _top_tools(recs, 3)}

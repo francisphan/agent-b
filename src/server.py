@@ -1,11 +1,11 @@
 """Agent B — MCP server exposing Salesforce, NetSuite, and Pardot tools."""
 
+import asyncio
 import hmac
 import json
 import logging
 import os
-import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -131,23 +131,25 @@ async def health(request):
 
 
 def _usage_report_authorized(request) -> bool:
-    """Bearer check for /usage/report — accepts either static token.
+    """Bearer check for /usage/report. Fails CLOSED.
 
-    Custom Starlette routes are NOT behind the SDK's auth middleware (that
-    guards only the MCP endpoint), and BearerAuthMiddleware is only mounted in
-    the no-OAuth path — so this route can't rely on either and checks the bearer
-    itself, accepting MCP_API_TOKEN *or* MCP_WRITE_TOKEN. When neither is
-    configured (local dev) the endpoint is open, matching BearerAuthMiddleware's
-    posture. Reads the module-level tokens so tests can monkeypatch them.
+    Custom Starlette routes are NOT behind any auth middleware: the SDK's
+    RequireAuthMiddleware wraps only the MCP route, and BearerAuthMiddleware is
+    mounted only in the no-OAuth path. So this route must guard itself. It
+    accepts MCP_WRITE_TOKEN *or* MCP_API_TOKEN. Critically, when no static token
+    is configured we allow ONLY if OAuth is also unconfigured (true local dev):
+    otherwise an OAuth-mode deploy with the static tokens removed would serve the
+    report — emails, Slack ids — to anyone. Reads module-level tokens/provider so
+    tests can monkeypatch them.
     """
-    if not READ_TOKEN and not WRITE_TOKEN:
-        return True
     bearer = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
     if WRITE_TOKEN and hmac.compare_digest(bearer, WRITE_TOKEN):
         return True
     if READ_TOKEN and hmac.compare_digest(bearer, READ_TOKEN):
         return True
-    return False
+    # No static-token match. Only open when nothing could authenticate anyway:
+    # no static tokens AND no OAuth provider mounted (local dev).
+    return not READ_TOKEN and not WRITE_TOKEN and _oauth_provider is None
 
 
 @mcp.custom_route("/usage/report", methods=["GET"])
@@ -155,10 +157,13 @@ async def usage_report_route(request):
     """Serve the weekly tool-usage report as JSON (bearer-protected).
 
     Consumed by the usage-report GitHub Actions cron. ``days`` (default 7,
-    clamped to 1..30) sets the window; the immediately preceding window of the
-    same length is returned as ``prev_totals`` for week-over-week context. Reads
-    the Redis usage mirror — on a store outage returns 503 rather than a
-    misleadingly-empty report.
+    clamped to 1..30) sets the window as ``days`` whole UTC calendar days ending
+    today, so the report's day axis and headline totals cover the same span
+    (a rolling-seconds window would leave a leading partial day out of the bars).
+    The immediately preceding, same-length, same-aligned window is returned as
+    ``prev_totals`` for week-over-week context. Reads the Redis usage mirror in a
+    worker thread (the sync client mustn't block the loop) — on a store outage
+    returns 503 rather than a misleadingly-empty report.
     """
     if not _usage_report_authorized(request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
@@ -169,14 +174,17 @@ async def usage_report_route(request):
         days = 7
     days = max(1, min(30, days))
 
-    now = time.time()
-    window = days * 86400
-    since_ts = now - window
-    prev_since_ts = since_ts - window
+    # Floor the window start to UTC midnight so it aligns with the calendar-day
+    # axis the email renders. The window is `days` whole days ending today.
+    now_dt = datetime.now(timezone.utc)
+    start_date = now_dt.date() - timedelta(days=days - 1)
+    since_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
+    since_ts = since_dt.timestamp()
+    prev_since_ts = since_ts - days * 86400  # exactly adjacent, same alignment
 
     try:
-        # One read covering both windows; split locally to avoid a second LRANGE.
-        everything = usage_store.fetch(prev_since_ts)
+        # One read covering both windows (in a thread — sync client); split below.
+        everything = await asyncio.to_thread(usage_store.fetch, prev_since_ts)
     except Exception as exc:
         return JSONResponse({"error": f"usage store unavailable: {exc}"}, status_code=503)
 
@@ -189,9 +197,9 @@ async def usage_report_route(request):
 
     report = weekly_report(records, prev_records)
     report["days"] = days
-    report["generated_at"] = datetime.now(timezone.utc).isoformat()
-    report["since"] = datetime.fromtimestamp(since_ts, tz=timezone.utc).isoformat()
-    report["until"] = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
+    report["generated_at"] = now_dt.isoformat()
+    report["since"] = since_dt.isoformat()
+    report["until"] = now_dt.isoformat()
     return JSONResponse(report)
 
 

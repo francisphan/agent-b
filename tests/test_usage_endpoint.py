@@ -18,9 +18,10 @@ def _req(headers=None, query=None):
     return types.SimpleNamespace(headers=headers or {}, query_params=query or {})
 
 
-def _set_tokens(monkeypatch, read=None, write=None):
+def _set_tokens(monkeypatch, read=None, write=None, oauth=None):
     monkeypatch.setattr(server, "READ_TOKEN", read)
     monkeypatch.setattr(server, "WRITE_TOKEN", write)
+    monkeypatch.setattr(server, "_oauth_provider", oauth)
 
 
 class TestUsageReportRoute:
@@ -83,11 +84,25 @@ class TestUsageReportRoute:
         assert resp.status_code == 503
         assert "error" in json.loads(resp.body)
 
-    def test_open_when_no_tokens_configured(self, monkeypatch):
-        _set_tokens(monkeypatch, read=None, write=None)
+    def test_open_when_no_tokens_and_no_oauth(self, monkeypatch):
+        # True local dev: no static tokens AND no OAuth provider → open.
+        _set_tokens(monkeypatch, read=None, write=None, oauth=None)
         monkeypatch.setattr(usage_store, "fetch", lambda since: [])
         resp = asyncio.run(server.usage_report_route(_req()))
         assert resp.status_code == 200
+
+    def test_fail_closed_when_oauth_configured_and_no_static_tokens(self, monkeypatch):
+        # SECURITY: OAuth-mode deploy with static tokens removed must NOT serve
+        # the report publicly (custom routes get no SDK auth wrapper).
+        _set_tokens(monkeypatch, read=None, write=None, oauth=object())
+        resp = asyncio.run(server.usage_report_route(_req()))
+        assert resp.status_code == 401
+
+    def test_since_is_utc_midnight_aligned(self, monkeypatch):
+        _set_tokens(monkeypatch, read=None, write=None)
+        monkeypatch.setattr(usage_store, "fetch", lambda since: [])
+        body = json.loads(asyncio.run(server.usage_report_route(_req())).body)
+        assert body["since"].endswith("T00:00:00+00:00")
 
     def test_days_clamped_to_30(self, monkeypatch):
         _set_tokens(monkeypatch, read=None, write=None)

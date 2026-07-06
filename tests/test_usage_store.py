@@ -97,6 +97,60 @@ class TestRecord:
         assert rec["ts"] == "2026-07-01T00:00:00+00:00"
 
 
+class AsyncFakeRedis:
+    """Async stand-in for redis.asyncio, recording awaited commands."""
+
+    def __init__(self, raise_on=None):
+        self.items = []
+        self.calls = []
+        self.raise_on = set(raise_on or ())
+
+    async def rpush(self, key, value):
+        self.calls.append(("rpush", key, value))
+        if "rpush" in self.raise_on:
+            raise RuntimeError("redis down")
+        self.items.append(value)
+
+    async def ltrim(self, key, start, end):
+        self.calls.append(("ltrim", key, start, end))
+        if "ltrim" in self.raise_on:
+            raise RuntimeError("redis down")
+
+
+class TestRecordAsync:
+    async def test_noops_without_redis_url(self, monkeypatch):
+        spy = AsyncFakeRedis()
+        monkeypatch.setattr(usage_store, "_aclient_box", [spy])
+        monkeypatch.delenv("REDIS_URL", raising=False)
+
+        await usage_store.record_async({"tool": "t", "ts": 1.0})
+
+        assert spy.calls == []
+
+    async def test_rpush_then_ltrim_with_cap(self, monkeypatch):
+        spy = AsyncFakeRedis()
+        monkeypatch.setattr(usage_store, "_get_async_client", lambda: spy)
+
+        await usage_store.record_async({"tool": "t", "ts": 5.0})
+
+        assert [c[0] for c in spy.calls] == ["rpush", "ltrim"]
+        assert spy.calls[1] == ("ltrim", usage_store.USAGE_KEY, -usage_store.MAX_RECORDS, -1)
+
+    async def test_swallows_raising_client(self, monkeypatch):
+        spy = AsyncFakeRedis(raise_on={"rpush"})
+        monkeypatch.setattr(usage_store, "_get_async_client", lambda: spy)
+        await usage_store.record_async({"tool": "t", "ts": 1.0})  # must not raise
+
+    async def test_stamps_epoch_ts(self, monkeypatch):
+        spy = AsyncFakeRedis()
+        monkeypatch.setattr(usage_store, "_get_async_client", lambda: spy)
+
+        await usage_store.record_async({"tool": "t", "ts": "2026-07-01T00:00:00+00:00"})
+
+        stored = json.loads(spy.items[0])
+        assert isinstance(stored["ts"], float)
+
+
 class TestFetch:
     def test_filters_by_ts(self, monkeypatch):
         items = [

@@ -297,18 +297,27 @@ class TestPerClient:
 
 
 class TestPerEndUser:
-    def test_only_sabueso_records_with_end_user(self):
+    def test_groups_any_record_with_end_user(self):
         recs = [
             _wrec(client="sabueso", end_user="U1", tool="a"),
             _wrec(client="sabueso", end_user="U1", tool="a"),
             _wrec(client="sabueso", end_user="U2", tool="b"),
             _wrec(client="sabueso", tool="c"),  # no end_user → excluded
-            _wrec(client="alice@x.com", end_user="U9", tool="d"),  # not sabueso → excluded
         ]
         peu = weekly_report(recs, [])["per_end_user"]
         assert [u["end_user"] for u in peu] == ["U1", "U2"]  # busiest first
         assert peu[0]["calls"] == 2
         assert peu[0]["top_tools"][0] == {"tool": "a", "calls": 2}
+
+    def test_includes_non_sabueso_static_end_users(self):
+        # An s2s-read end_user must not be silently dropped: the trust rule lets
+        # any static caller attribute an end_user, so aggregation includes them.
+        recs = [
+            _wrec(client="sabueso", end_user="U1", tool="a"),
+            _wrec(client="s2s-read", end_user="svc-batch", tool="b"),
+        ]
+        peu = weekly_report(recs, [])["per_end_user"]
+        assert {u["end_user"] for u in peu} == {"U1", "svc-batch"}
 
     def test_empty_when_no_end_users(self):
         recs = [_wrec(client="sabueso", tool="a")]

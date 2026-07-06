@@ -64,4 +64,7 @@ jobs:
             exit 0
           fi
           git commit -m "usage: weekly report snapshot ${SNAPSHOT_DATE}"
-          git push
+          # main may have moved during the run — rebase before pushing so we
+          # don't fail on a non-fast-forward.
+          git pull --rebase origin main
+          git push origin HEAD:main

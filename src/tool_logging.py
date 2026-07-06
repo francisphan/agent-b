@@ -19,6 +19,8 @@ at a mounted volume if you need the JSONL to survive redeploys.
 
 from __future__ import annotations
 
+import asyncio
+import hmac
 import json
 import logging
 import os
@@ -47,8 +49,11 @@ correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=No
 # Cap to keep a hostile/garbage header out of the logs unbounded.
 _MAX_CORRELATION_ID = 64
 
-# Same cap for the X-End-User header (see _end_user_from_request).
-_MAX_END_USER = 64
+# X-End-User is caller-supplied, so validate rather than merely length-cap it:
+# accept a conservative id charset (covers Slack ids like U06L80JUUD6) with no
+# "@", whitespace, or control chars — keeps emails/PII and CR/LF log-injection
+# out of the logs, Redis, and the report. Anything else is dropped.
+_END_USER_RE = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 
 
 def _correlation_from_request() -> str | None:
@@ -106,55 +111,88 @@ def _active_request() -> Any:
 
 
 def _caller_from_request() -> str | None:
-    """Resolve the caller label off the live request's authenticated user.
+    """Resolve the caller label off the live request.
 
-    The SDK stores whatever ``load_access_token`` returned on
-    ``request.scope["user"].access_token`` (an ``AccessToken``), and we hung the
-    OAuth email on its ``subject``. Reading it here — rather than from the CALLER
-    contextvar — is reliable across the streamable-http task boundary, the same
-    reason corr is read from the request. Returns None when the request carries
-    no authenticated user (no-OAuth mode, where CALLER is the fallback).
+    Two paths, both read off the request (reliable across the streamable-http
+    task boundary, unlike a contextvar):
+
+    1. OAuth mode — the SDK stores whatever ``load_access_token`` returned on
+       ``request.scope["user"].access_token`` (an ``AccessToken``), with the
+       OAuth email hung on its ``subject``.
+    2. No-OAuth (static-token) mode — the SDK auth middleware isn't mounted, so
+       there is no ``scope["user"]``; recover the caller by matching the request's
+       bearer against the static tokens (BearerAuthMiddleware's CALLER contextvar
+       set in the ASGI task doesn't reach this dispatch task — the corr bug).
+
+    Returns None when neither path resolves, leaving the CALLER contextvar as the
+    last-resort fallback.
     """
     request = _active_request()
+    if request is None:
+        return None
+
     scope = getattr(request, "scope", None)
     user = scope.get("user") if hasattr(scope, "get") else None
     token = getattr(user, "access_token", None)
-    if token is None:
-        return None
-    from src.auth import caller_label
+    if token is not None:
+        from src.auth import caller_label
 
-    return caller_label(getattr(token, "client_id", None), getattr(token, "subject", None))
+        return caller_label(getattr(token, "client_id", None), getattr(token, "subject", None))
+
+    # No authenticated user on the scope → static-token mode. Match the bearer.
+    headers = getattr(request, "headers", None)
+    if not headers:
+        return None
+    from src.auth import READ_TOKEN, WRITE_TOKEN
+
+    bearer = headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not bearer:
+        return None
+    if WRITE_TOKEN and hmac.compare_digest(bearer, WRITE_TOKEN):
+        return "sabueso"
+    if READ_TOKEN and hmac.compare_digest(bearer, READ_TOKEN):
+        return "s2s-read"
+    return None
 
 
 def _end_user_from_request() -> str | None:
-    """Read the optional X-End-User header off the live request.
+    """Read and validate the optional X-End-User header off the live request.
 
     Sabueso sets this to the originating Slack user id so per-end-user usage can
-    be attributed under the shared bot credential. Read the same way as corr.
+    be attributed under the shared bot credential. The value is caller-supplied,
+    so it's validated against ``_END_USER_RE`` and dropped if it doesn't match.
     """
     request = _active_request()
     headers = getattr(request, "headers", None)
     if not headers:
         return None
     eu = headers.get("x-end-user")
-    return eu[:_MAX_END_USER] if eu else None
+    return eu if eu and _END_USER_RE.match(eu) else None
 
 
 def _caller_context() -> tuple[str, str | None]:
-    """Resolve ``(client, end_user)`` for a tool call.
+    """Resolve ``(client, end_user)`` for a tool call. Never raises.
 
     ``client`` prefers the live-request read and falls back to the CALLER
     contextvar (set at auth time), then "anonymous". ``end_user`` is only
-    trusted for static-token clients (Sabueso): an OAuth user shouldn't be able
-    to spoof attribution rows, and their identity is already their email.
-    """
-    from src.auth import CALLER, STATIC_CALLERS
+    trusted for static-token clients (Sabueso / s2s): an OAuth user shouldn't be
+    able to spoof attribution rows, and their identity is already their email.
 
-    client = _caller_from_request() or CALLER.get()
-    end_user = _end_user_from_request()
-    if not (end_user and client in STATIC_CALLERS):
-        end_user = None
-    return client, end_user
+    Wrapped in a catch-all: this runs on the tool-call path (outside the
+    dispatcher's own try), so an unexpected scope/token shape must degrade to
+    ("anonymous", None) rather than break the call.
+    """
+    try:
+        from src.auth import CALLER, STATIC_CALLERS
+
+        client = _caller_from_request() or CALLER.get()
+        end_user = _end_user_from_request()
+        if not (end_user and client in STATIC_CALLERS):
+            end_user = None
+        return client, end_user
+    except Exception:  # pragma: no cover - attribution must never break a call
+        logger.debug("Caller attribution failed; recording anonymous", exc_info=True)
+        return "anonymous", None
 
 
 # Per-string-value cap so a giant query or note can't bloat the logs.
@@ -370,15 +408,48 @@ def _write_usage_record(record: dict) -> None:
     except Exception:  # pragma: no cover - logging must never break a tool call
         logger.debug("Could not write tool-usage record", exc_info=True)
 
-    # Mirror the record into Redis so the weekly report can serve windows the
-    # ephemeral JSONL can't (see src/usage_store.py). Independent of the JSONL
-    # write above and, like it, strictly best-effort: usage_store.record already
-    # swallows everything, but wrap the call too so an import hiccup can't break
-    # a tool call either.
+    _mirror_usage_record(record)
+
+
+# Fired-and-forgotten mirror tasks are parked here so the loop keeps a strong
+# reference (an unreferenced task can be GC'd mid-flight) and their exceptions
+# are retrieved. Discarded when each completes.
+_pending_mirror_tasks: set = set()
+
+
+def _on_mirror_done(task: asyncio.Task) -> None:
+    _pending_mirror_tasks.discard(task)
+    if not task.cancelled():
+        task.exception()  # retrieve so it's not reported as "never retrieved"
+
+
+def _mirror_usage_record(record: dict) -> None:
+    """Mirror one record into the Redis usage store. Best-effort; never blocks.
+
+    On the async tool-call path (a running loop) the write is fired-and-forgotten
+    via ``record_async`` so a slow/unreachable Redis can't stall the event loop.
+    Off-loop callers (the CLI, unit tests) fall back to the synchronous
+    ``record``. Every failure mode — import hiccup, no loop, Redis down — is
+    swallowed: the mirror must never break or delay a real tool call.
+    """
     try:
         from src import usage_store
+    except Exception:  # pragma: no cover - mirror must never break a tool call
+        logger.debug("Could not import usage_store for mirroring", exc_info=True)
+        return
 
-        usage_store.record(record)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    try:
+        if loop is not None:
+            task = loop.create_task(usage_store.record_async(record))
+            _pending_mirror_tasks.add(task)
+            task.add_done_callback(_on_mirror_done)
+        else:
+            usage_store.record(record)
     except Exception:  # pragma: no cover - mirror must never break a tool call
         logger.debug("Could not mirror tool-usage record to store", exc_info=True)
 

@@ -39,12 +39,16 @@ MAX_RECORDS = 100_000
 # slow Redis must fail fast rather than add latency to the user's request.
 _SOCKET_TIMEOUT = 2
 
-# Boxed so tests can reset it; lazily built on first use when REDIS_URL is set.
+# Boxed so tests can reset them; lazily built on first use when REDIS_URL is set.
+# Sync client backs record()/fetch() (CLI, tests, and the endpoint via a worker
+# thread); async client backs record_async(), fired-and-forgotten from the async
+# tool dispatcher so a slow Redis can never block the event loop.
 _client_box: list = [None]
+_aclient_box: list = [None]
 
 
 def _get_client():
-    """Return a lazily-built Redis client, or ``None`` when ``REDIS_URL`` is unset.
+    """Return a lazily-built sync Redis client, or ``None`` when ``REDIS_URL`` is unset.
 
     Mirrors :mod:`src.oauth_store`'s ``redis.from_url`` construction but with the
     tighter connect/op timeouts appropriate to the tool-call hot path.
@@ -62,6 +66,28 @@ def _get_client():
             socket_timeout=_SOCKET_TIMEOUT,
         )
     return _client_box[0]
+
+
+def _get_async_client():
+    """Return a lazily-built async Redis client, or ``None`` when ``REDIS_URL`` is unset.
+
+    Uses ``redis.asyncio`` (like :mod:`src.oauth_store`) so awaiting its calls
+    yields the event loop instead of blocking it — the whole point of the async
+    mirror path.
+    """
+    url = os.getenv("REDIS_URL")
+    if not url:
+        return None
+    if _aclient_box[0] is None:
+        import redis.asyncio as aredis  # lazy: only needed when REDIS_URL is set
+
+        _aclient_box[0] = aredis.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=_SOCKET_TIMEOUT,
+            socket_timeout=_SOCKET_TIMEOUT,
+        )
+    return _aclient_box[0]
 
 
 def _epoch(value: object) -> float:
@@ -93,14 +119,38 @@ def record(rec: dict) -> None:
         client = _get_client()
         if client is None:
             return
-        payload = dict(rec)
-        if not isinstance(payload.get("ts"), (int, float)):
-            payload["ts"] = _epoch(payload.get("ts"))
-        client.rpush(USAGE_KEY, json.dumps(payload, default=str))
+        client.rpush(USAGE_KEY, json.dumps(_stamped(rec), default=str))
         client.ltrim(USAGE_KEY, -MAX_RECORDS, -1)
     except Exception:
         # Swallowed on purpose — see the module docstring.
         pass
+
+
+async def record_async(rec: dict) -> None:
+    """Async twin of :func:`record`, for the event-loop-driven tool dispatcher.
+
+    Awaiting the ``redis.asyncio`` calls yields the loop rather than blocking it,
+    so a slow or unreachable Redis can't stall other requests. Fired-and-forgotten
+    by tool_logging, so — like :func:`record` — it swallows every exception and
+    no-ops without ``REDIS_URL``.
+    """
+    try:
+        client = _get_async_client()
+        if client is None:
+            return
+        await client.rpush(USAGE_KEY, json.dumps(_stamped(rec), default=str))
+        await client.ltrim(USAGE_KEY, -MAX_RECORDS, -1)
+    except Exception:
+        # Swallowed on purpose — see the module docstring.
+        pass
+
+
+def _stamped(rec: dict) -> dict:
+    """Copy ``rec`` and ensure it carries an epoch float ``ts`` (see :func:`_epoch`)."""
+    payload = dict(rec)
+    if not isinstance(payload.get("ts"), (int, float)):
+        payload["ts"] = _epoch(payload.get("ts"))
+    return payload
 
 
 def fetch(since_ts: float) -> list[dict]:
