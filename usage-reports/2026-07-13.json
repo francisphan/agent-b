@@ -1,0 +1,213 @@
+{
+  "auth_split": {
+    "write": 69
+  },
+  "days": 7,
+  "generated_at": "2026-07-13T12:00:11.844154+00:00",
+  "per_client": [
+    {
+      "calls": 69,
+      "client": "sabueso",
+      "degraded": 7,
+      "errors": 14,
+      "top_tools": [
+        {
+          "calls": 36,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 20,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 5,
+          "tool": "ns_rest_get"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-07-08": 3,
+    "2026-07-11": 35,
+    "2026-07-12": 20,
+    "2026-07-13": 11
+  },
+  "per_end_user": [
+    {
+      "calls": 29,
+      "end_user": "U087HK4EKT7",
+      "top_tools": [
+        {
+          "calls": 13,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 10,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 4,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 18,
+      "end_user": "U0905U06SAV",
+      "top_tools": [
+        {
+          "calls": 11,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 4,
+          "tool": "ns_rest_get"
+        },
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 14,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 7,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 6,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 8,
+      "end_user": "U08KWHQUY0Y",
+      "top_tools": [
+        {
+          "calls": 5,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_find_by_email"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 36,
+      "degraded": 0,
+      "errors": 10,
+      "p50_ms": 610.5,
+      "p95_ms": 8206.75,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 20,
+      "degraded": 6,
+      "errors": 0,
+      "p50_ms": 1740.5,
+      "p95_ms": 5913.250000000002,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 5,
+      "degraded": 0,
+      "errors": 4,
+      "p50_ms": 904.0,
+      "p95_ms": 5821.599999999999,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 4,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 556.0,
+      "p95_ms": 1307.1999999999996,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "ns_get_netsuite_schema"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 632.0,
+      "p95_ms": 632.0,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 1,
+      "degraded": 1,
+      "errors": 0,
+      "p50_ms": 7635.0,
+      "p95_ms": 7635.0,
+      "tool": "wine_owner_lookup"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 673.0,
+      "p95_ms": 673.0,
+      "tool": "sf_find_by_email"
+    }
+  ],
+  "prev_totals": {
+    "calls": 24,
+    "degraded": 1,
+    "error": 1,
+    "error_rate": 0.041666666666666664,
+    "ok": 22
+  },
+  "since": "2026-07-07T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 7,
+      "error": "Pardot: Pardot tools are disabled (PARDOT_TOOLS_ENABLED is off) \u2014 refusing to call the Pardot API.; OPERA: OPERA access is disabled (OPERA_TOOLS_ENABLED is off) \u2014 refusing to call opera-pms-api."
+    },
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Unknown identifier '\"TYPE\"'. Available identifiers are: {item=item}."
+    },
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Unknown identifier 'quantityavailable'. Available identifiers are: {item=item}."
+    },
+    {
+      "count": 2,
+      "error": "Bad Request: Error while accessing a resource. The record you are attempting to load has a different type: lotnumberedassemblyitem from the type specified: inventoryitem."
+    },
+    {
+      "count": 1,
+      "error": "Internal Server Error: An unexpected error occurred. Error ID: mrgrmhj71brizfy9rl9sw"
+    }
+  ],
+  "totals": {
+    "calls": 69,
+    "degraded": 7,
+    "error": 14,
+    "error_rate": 0.2028985507246377,
+    "ok": 48
+  },
+  "until": "2026-07-13T12:00:11.844154+00:00"
+}
