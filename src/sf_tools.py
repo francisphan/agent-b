@@ -11,7 +11,7 @@ from src.sf_client import (
 )
 from src.sanitize import escape_soql
 from src.schema_cache import schema_cache
-from src.sf_schema import SCHEMA
+from src.sf_schema import SCHEMA, GLOBAL_TIPS as SF_TIPS
 from src.query_validator import validate_soql, enhance_sf_error
 
 
@@ -136,23 +136,25 @@ def register_tools(mcp):
                      If empty, returns schema for all curated objects.
 
         Returns:
-            A dict keyed by object name with field, relationship, and example query info.
-            Unknown objects are silently omitted. Returns an error dict on complete failure.
+            A dict keyed by object name with field, relationship, and example query info,
+            plus a "_tips" key with cross-object SOQL gotchas (no LOWER() in WHERE,
+            long-text fields not filterable). Unknown objects are silently omitted.
         """
         if not objects.strip():
-            return SCHEMA
+            result = dict(SCHEMA)
+        else:
+            result = {}
+            for obj_name in objects.split(","):
+                obj_name = obj_name.strip()
+                if not obj_name:
+                    continue
+                # Case-insensitive lookup
+                for schema_name, schema_data in SCHEMA.items():
+                    if schema_name.lower() == obj_name.lower():
+                        result[schema_name] = schema_data
+                        break
 
-        result = {}
-        for obj_name in objects.split(","):
-            obj_name = obj_name.strip()
-            if not obj_name:
-                continue
-            # Case-insensitive lookup
-            for schema_name, schema_data in SCHEMA.items():
-                if schema_name.lower() == obj_name.lower():
-                    result[schema_name] = schema_data
-                    break
-
+        result["_tips"] = SF_TIPS
         return result
 
     @mcp.tool()

@@ -96,6 +96,15 @@ def _get_ns_field_names(record_type: str) -> list[str] | None:
     return None
 
 
+# Long Text Area fields the live API refuses to filter on ("field 'X' can not
+# be filtered in a query call"), keyed by lowercase object name. These came up
+# in real bot traffic — extend as more are hit.
+_NON_FILTERABLE_FIELDS: dict[str, tuple[str, ...]] = {
+    "account": ("Description",),
+    "tvrs_guest__c": ("Comments__c",),
+}
+
+
 # ---------------------------------------------------------------------------
 # Public validation
 # ---------------------------------------------------------------------------
@@ -116,6 +125,47 @@ def validate_soql(soql: str) -> dict:
     if not obj:
         result["valid"] = False
         result["warnings"].append("Could not parse FROM clause — missing object name.")
+        return result
+
+    # SOQL rejects scalar functions in WHERE ("Invalid aggregate function:
+    # LOWER") — and doesn't need them: filters and LIKE are case-insensitive.
+    where_match = re.search(
+        r"\bWHERE\s+(.+?)(?:\bORDER\b|\bGROUP\b|\bLIMIT\b|\bOFFSET\b|$)",
+        soql,
+        re.IGNORECASE | re.DOTALL,
+    )
+    where_clause = where_match.group(1) if where_match else ""
+    func_match = re.search(r"\b(LOWER|UPPER)\s*\(", where_clause, re.IGNORECASE)
+    if func_match:
+        result["valid"] = False
+        result["warnings"].append(
+            f"SOQL does not support {func_match.group(1).upper()}() (or any scalar "
+            "function) in WHERE — it fails with 'Invalid aggregate function'."
+        )
+        result["suggestions"].append(
+            "SOQL field filters and LIKE are already case-insensitive — drop the "
+            "function wrapper (WHERE Name LIKE '%smith%')."
+        )
+
+    # Long Text Area fields can't appear in WHERE/ORDER BY — the API rejects the
+    # query with "field 'X' can not be filtered in a query call".
+    for obj_key, bad_fields in _NON_FILTERABLE_FIELDS.items():
+        if obj.lower() != obj_key:
+            continue
+        for field in bad_fields:
+            if re.search(
+                rf"\b{field}\s*(?:=|!=|<|>|LIKE\b|IN\b|NOT\b)", where_clause, re.IGNORECASE
+            ):
+                result["valid"] = False
+                result["warnings"].append(
+                    f"'{field}' on {obj} is a Long Text Area and cannot be filtered "
+                    "in SOQL (MALFORMED_QUERY)."
+                )
+                result["suggestions"].append(
+                    "Search its text with SOSL instead: sf_search(sosl_query="
+                    f'"FIND {{your text}} IN ALL FIELDS RETURNING {obj}(Id, Name, {field})").'
+                )
+    if not result["valid"]:
         return result
 
     # Check object name
@@ -162,6 +212,42 @@ def validate_soql(soql: str) -> dict:
                     result["suggestions"].append(f"Replace '{field}' with '{close[0]}'")
 
     return result
+
+
+# A MySQL-style row cap at the very end of the query (optionally 'LIMIT n
+# OFFSET m', optional trailing semicolon). Only the trailing form is rewritten —
+# a LIMIT buried mid-query (e.g. in a subquery) can't be safely translated, so
+# it still blocks with the explanatory error in validate_suiteql.
+_TRAILING_LIMIT_RE = re.compile(r"\bLIMIT\s+(\d+)(?:\s+OFFSET\s+(\d+))?\s*;?\s*$", re.IGNORECASE)
+
+
+def rewrite_suiteql_limit(query: str) -> tuple[str, str | None]:
+    """Rewrite a trailing MySQL-style 'LIMIT n [OFFSET m]' into Oracle syntax.
+
+    SuiteQL is Oracle SQL, so 'LIMIT n' always 400s — but the intent of a
+    *trailing* LIMIT is unambiguous, so instead of bouncing the query back we
+    translate it to 'FETCH FIRST n ROWS ONLY' ('OFFSET m ROWS FETCH NEXT n ROWS
+    ONLY' when an OFFSET is present) and tell the caller what happened.
+
+    Returns (query, note): the possibly-rewritten query, and a human-readable
+    note describing the rewrite (None when nothing was rewritten).
+    """
+    m = _TRAILING_LIMIT_RE.search(query)
+    if not m:
+        return query, None
+    n, off = m.group(1), m.group(2)
+    if off is not None:
+        replacement = f"OFFSET {off} ROWS FETCH NEXT {n} ROWS ONLY"
+    else:
+        replacement = f"FETCH FIRST {n} ROWS ONLY"
+    rewritten = query[: m.start()] + replacement
+    note = (
+        f"Rewrote trailing '{m.group(0).strip()}' to '{replacement}' — SuiteQL is "
+        "Oracle SQL and does not support the 'LIMIT' keyword. Use "
+        "'FETCH FIRST n ROWS ONLY' (or the tool's 'limit' parameter) directly "
+        "next time."
+    )
+    return rewritten, note
 
 
 def validate_suiteql(query: str) -> dict:

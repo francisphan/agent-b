@@ -74,28 +74,34 @@ class TestSfGetSchemaTool:
 
     def test_returns_full_schema_when_empty(self, get_schema_tool):
         result = get_schema_tool(objects="")
-        assert result is SCHEMA
+        assert set(result.keys()) == set(SCHEMA.keys()) | {"_tips"}
+        assert result["Account"] is SCHEMA["Account"]
 
     def test_returns_full_schema_when_whitespace(self, get_schema_tool):
         result = get_schema_tool(objects="   ")
-        assert result is SCHEMA
+        assert set(result.keys()) == set(SCHEMA.keys()) | {"_tips"}
 
     def test_returns_filtered_single(self, get_schema_tool):
         result = get_schema_tool(objects="Account")
-        assert "Account" in result
-        assert len(result) == 1
+        assert set(result.keys()) == {"Account", "_tips"}
 
     def test_returns_filtered_multiple(self, get_schema_tool):
         result = get_schema_tool(objects="Account,Contact,Opportunity")
-        assert set(result.keys()) == {"Account", "Contact", "Opportunity"}
+        assert set(result.keys()) == {"Account", "Contact", "Opportunity", "_tips"}
 
     def test_handles_unknown_objects(self, get_schema_tool):
         result = get_schema_tool(objects="FakeObject__c")
-        assert result == {}
+        assert set(result.keys()) == {"_tips"}
 
     def test_mixed_known_and_unknown(self, get_schema_tool):
         result = get_schema_tool(objects="Account,FakeObject__c,TVRS_Guest__c")
-        assert set(result.keys()) == {"Account", "TVRS_Guest__c"}
+        assert set(result.keys()) == {"Account", "TVRS_Guest__c", "_tips"}
+
+    def test_tips_carry_soql_gotchas(self, get_schema_tool):
+        result = get_schema_tool(objects="Account")
+        tips = " ".join(result["_tips"])
+        assert "LOWER" in tips
+        assert "sf_search" in tips
 
     def test_case_insensitive_lookup(self, get_schema_tool):
         result = get_schema_tool(objects="account,tvrs_guest__c")
@@ -104,4 +110,4 @@ class TestSfGetSchemaTool:
 
     def test_handles_whitespace_in_list(self, get_schema_tool):
         result = get_schema_tool(objects=" Account , Contact ")
-        assert set(result.keys()) == {"Account", "Contact"}
+        assert set(result.keys()) == {"Account", "Contact", "_tips"}

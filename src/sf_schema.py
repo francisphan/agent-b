@@ -428,6 +428,18 @@ SCHEMA: dict[str, dict] = {
 }
 
 
+# Cross-object SOQL gotchas that make LLM-authored queries 400 against the live
+# API. Mirrors ns_schema.GLOBAL_TIPS (a flat list of plain-string tips).
+GLOBAL_TIPS: list[str] = [
+    "SOQL does not support scalar functions in WHERE — LOWER()/UPPER() fail "
+    "with 'Invalid aggregate function'. SOQL field filters and LIKE are already "
+    "case-insensitive, so just write: WHERE Name LIKE '%smith%'.",
+    "Long Text Area fields (e.g. Account.Description, TVRS_Guest__c.Comments__c) "
+    "CANNOT be filtered or sorted in SOQL — 'field can not be filtered' "
+    "MALFORMED_QUERY. To search their text use SOSL via sf_search, e.g. "
+    "FIND {negociante} IN ALL FIELDS RETURNING Account(Id, Name, Description).",
+]
+
 # Convenience: quick lookup of object names
 OBJECT_NAMES = sorted(SCHEMA.keys())
 

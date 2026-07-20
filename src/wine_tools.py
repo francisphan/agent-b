@@ -592,6 +592,8 @@ def lookup_wine_owner(
                 # person_brief) — and the usage-log degraded classifier — looks
                 # for _errors on the returned dict, not nested in a section.
                 result["_errors"] = list(errs)
+            if profile.get("_skipped"):
+                result["_skipped"] = list(profile["_skipped"])
         except Exception as e:  # noqa: BLE001
             result["enrichment_status"] = f"unavailable: {e}"
             result["_errors"] = [f"guest_360: {e}"]

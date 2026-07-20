@@ -5,6 +5,7 @@ from src.query_validator import (
     validate_suiteql,
     enhance_sf_error,
     enhance_ns_error,
+    rewrite_suiteql_limit,
 )
 
 
@@ -43,6 +44,37 @@ class TestValidateSoql:
             "SELECT Id, Email__c FROM TVRS_Guest__c WHERE Check_In_Date__c >= TODAY"
         )
         assert result["valid"] is True
+
+    def test_lower_in_where_rejected(self):
+        # The exact production failure: WHERE LOWER(Description) LIKE ... fails
+        # with "Invalid aggregate function: LOWER".
+        result = validate_soql(
+            "SELECT Id, Name FROM Account WHERE LOWER(Name) LIKE '%negociante%'"
+        )
+        assert result["valid"] is False
+        assert any("LOWER" in w for w in result["warnings"])
+        assert any("case-insensitive" in s for s in result["suggestions"])
+
+    def test_lower_in_select_not_flagged_by_where_check(self):
+        # Only WHERE is checked — the observed failures are all filters.
+        result = validate_soql("SELECT Id, Name FROM Account WHERE Name = 'X'")
+        assert result["valid"] is True
+
+    def test_long_text_filter_rejected(self):
+        # Account.Description is a Long Text Area — not filterable in SOQL.
+        result = validate_soql("SELECT Id, Name FROM Account WHERE Description LIKE '%villa%'")
+        assert result["valid"] is False
+        assert any("Description" in w for w in result["warnings"])
+        assert any("sf_search" in s for s in result["suggestions"])
+
+    def test_long_text_in_select_allowed(self):
+        result = validate_soql("SELECT Id, Description FROM Account WHERE Name = 'X'")
+        assert result["valid"] is True
+
+    def test_comments_filter_on_guest_rejected(self):
+        result = validate_soql("SELECT Id FROM TVRS_Guest__c WHERE Comments__c LIKE '%vip%'")
+        assert result["valid"] is False
+        assert any("Comments__c" in w for w in result["warnings"])
 
 
 class TestValidateSuiteql:
@@ -130,6 +162,49 @@ class TestValidateSuiteql:
         )
         assert result["valid"] is True
         assert result["warnings"] == []
+
+
+class TestRewriteSuiteqlLimit:
+    def test_trailing_limit_rewritten(self):
+        q, note = rewrite_suiteql_limit(
+            "SELECT id FROM customer ORDER BY lastmodifieddate DESC LIMIT 50"
+        )
+        assert q.endswith("FETCH FIRST 50 ROWS ONLY")
+        assert "LIMIT" not in q.upper().replace("FETCH", "")
+        assert note is not None and "FETCH FIRST 50 ROWS ONLY" in note
+
+    def test_trailing_limit_offset_rewritten(self):
+        q, note = rewrite_suiteql_limit("SELECT id FROM customer LIMIT 10 OFFSET 20")
+        assert q.endswith("OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY")
+        assert note is not None
+
+    def test_trailing_semicolon_handled(self):
+        q, note = rewrite_suiteql_limit("SELECT id FROM customer LIMIT 5;")
+        assert q.endswith("FETCH FIRST 5 ROWS ONLY")
+        assert note is not None
+
+    def test_no_limit_untouched(self):
+        original = "SELECT id FROM customer FETCH FIRST 5 ROWS ONLY"
+        q, note = rewrite_suiteql_limit(original)
+        assert q == original
+        assert note is None
+
+    def test_mid_query_limit_not_rewritten(self):
+        # A LIMIT in a subquery isn't at the end — leave it for the blocking
+        # validator, which explains the problem instead of guessing intent.
+        original = (
+            "SELECT id FROM customer WHERE id IN "
+            "(SELECT entity FROM transaction LIMIT 5) ORDER BY id"
+        )
+        q, note = rewrite_suiteql_limit(original)
+        assert q == original
+        assert note is None
+
+    def test_limit_inside_trailing_string_literal_untouched(self):
+        original = "SELECT id FROM customer WHERE comments = 'order LIMIT 5'"
+        q, note = rewrite_suiteql_limit(original)
+        assert q == original
+        assert note is None
 
 
 class TestEnhanceSfError:

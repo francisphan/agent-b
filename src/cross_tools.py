@@ -1,10 +1,18 @@
 """Cross-system lookup tools that correlate data across Salesforce, NetSuite, and Pardot."""
 
+from src.errors import IntegrationDisabledError
 from src.sanitize import escape_soql, escape_suiteql, validate_sf_id
 from src.sf_client import query as sf_query
 from src.ns_client import suiteql_query
 from src.pardot_client import query_prospects
 from src.opera_client import query as opera_query
+
+
+def _mark_skipped(profile: dict, note: str) -> None:
+    """Record an intentionally-disabled leg. Kept separate from _errors so the
+    usage log doesn't classify config state (a switched-off integration) as a
+    degraded call."""
+    profile.setdefault("_skipped", []).append(note)
 
 
 def lookup_guest(email: str) -> dict:
@@ -56,6 +64,8 @@ def lookup_guest(email: str) -> dict:
             {"fields": "id,email,firstName,lastName,createdAt", "email": email_lower}
         )
         result["pardot"] = pardot_result
+    except IntegrationDisabledError as e:
+        result["pardot"] = {"skipped": str(e)}
     except Exception as e:
         result["pardot"] = {"error": str(e)}
 
@@ -172,6 +182,8 @@ def guest_360(email: str) -> dict:
             profile["marketing"]["pardot_grade"] = prospect.get("grade")
             profile["marketing"]["last_activity"] = prospect.get("lastActivityAt")
         profile["marketing"]["pardot_raw"] = pardot_result
+    except IntegrationDisabledError as e:
+        _mark_skipped(profile, f"Pardot: {e}")
     except Exception as e:
         profile["_errors"] = profile.get("_errors", [])
         profile["_errors"].append(f"Pardot: {e}")
@@ -206,6 +218,8 @@ def guest_360(email: str) -> dict:
                 limit=100,
             )
             profile["stays_opera"] = stays
+    except IntegrationDisabledError as e:
+        _mark_skipped(profile, f"OPERA: {e}")
     except Exception as e:
         profile["_errors"] = profile.get("_errors", [])
         profile["_errors"].append(f"OPERA: {e}")
@@ -246,6 +260,7 @@ def register_tools(mcp):
         Returns:
             A unified profile dict with sections: identity, stays, financials,
             marketing, and system_ids. Partial results are returned if some
-            systems fail (errors listed in _errors).
+            systems fail (errors listed in _errors; integrations switched off by
+            config are listed in _skipped instead).
         """
         return guest_360(email)

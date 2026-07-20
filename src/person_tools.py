@@ -554,6 +554,8 @@ def build_person_brief(query: str, deep: bool = True) -> dict:
             out["system_ids"].update({k: v for k, v in (p.get("system_ids") or {}).items() if v})
             if p.get("_errors"):
                 out["_errors"] = p["_errors"]
+            if p.get("_skipped"):
+                out["_skipped"] = p["_skipped"]
         except Exception as e:  # noqa: BLE001 — deep section is best-effort
             out["_errors"] = [f"guest_360: {e}"]
 
@@ -613,6 +615,7 @@ def register_tools(mcp):
             future), opportunities, system_ids, links (Salesforce account/contact
             URLs for a human to open; each won_opportunities entry also has a
             `url`), and — when deep — stays, stays_opera, financials, marketing.
-            Partial failures are in _errors.
+            Partial failures are in _errors; integrations switched off by config
+            are listed in _skipped instead.
         """
         return build_person_brief(query, deep=deep)

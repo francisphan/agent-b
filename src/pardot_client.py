@@ -8,6 +8,7 @@ import time
 import requests
 from dotenv import load_dotenv
 
+from src.errors import IntegrationDisabledError
 from src.sf_client import (
     get_client as get_sf_client,
     _reconnect as sf_reconnect,
@@ -199,7 +200,7 @@ def _with_retry(func):
     Pardot leg — funnels through here, so one guard covers them all, and it fires
     before any session build or auth work. Mirrors opera_client.query()."""
     if not pardot_enabled():
-        raise RuntimeError(
+        raise IntegrationDisabledError(
             "Pardot tools are disabled (PARDOT_TOOLS_ENABLED is off) — refusing "
             "to call the Pardot API."
         )
