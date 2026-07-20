@@ -15,9 +15,26 @@ def _call(query: str, **kwargs):
 
 
 class TestSuiteqlPreflight:
-    def test_limit_clause_short_circuits_before_netsuite(self):
-        with patch("src.ns_tools.suiteql_query") as mock_query:
+    def test_trailing_limit_rewritten_and_executes(self):
+        # A trailing MySQL-style LIMIT has unambiguous intent — translate it to
+        # Oracle syntax and run the query, teaching the fix via a warning.
+        with patch("src.ns_tools.suiteql_query", return_value=[{"id": "1"}]) as mock_query:
             result = _call("SELECT id FROM customer ORDER BY id LIMIT 50")
+        mock_query.assert_called_once()
+        sent_query = mock_query.call_args[0][0]
+        assert sent_query.endswith("FETCH FIRST 50 ROWS ONLY")
+        assert "LIMIT" not in sent_query
+        assert result["records"] == [{"id": "1"}]
+        assert any("Rewrote" in w for w in result["warnings"])
+
+    def test_mid_query_limit_short_circuits_before_netsuite(self):
+        # A LIMIT that is NOT at the end (e.g. in a subquery) can't be safely
+        # rewritten — it still short-circuits with the explanatory error.
+        with patch("src.ns_tools.suiteql_query") as mock_query:
+            result = _call(
+                "SELECT id FROM customer WHERE id IN "
+                "(SELECT entity FROM transaction LIMIT 5) ORDER BY id"
+            )
         mock_query.assert_not_called()
         # Failure shape matches the exception path: single-element error list.
         assert isinstance(result, list) and len(result) == 1

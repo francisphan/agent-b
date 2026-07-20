@@ -397,6 +397,25 @@ GLOBAL_TIPS: list[str] = [
     "Booleans compare against 'T'/'F' strings, not true/false.",
     "String compares are case-sensitive — wrap with LOWER() for case-insensitive "
     "matching. Dates: TO_DATE('2025-01-01', 'YYYY-MM-DD'), SYSDATE.",
+    'These tables are NOT queryable in this account/role and 400 with "Record '
+    "'X' was not found\": customercategory, classification, supportcategory, "
+    "employee, customlist, and customlist_* custom-list tables (the integration "
+    "role lacks the 'Custom Lists' permission). Do not JOIN them — resolve "
+    "list/reference fields to display text with BUILTIN.DF() instead, e.g. "
+    "BUILTIN.DF(c.custentity_vom_csam) AS cs_rep, BUILTIN.DF(c.category) AS "
+    "category.",
+    "Metadata tables (customfield, customrecordtype) run on the legacy search "
+    "engine with a restricted column set — identifiers like id, label, "
+    'fieldname 400 with "Unknown identifier", and FETCH FIRST is a syntax '
+    "error there. Use ns_get_record_schema / ns_list_record_types for field and "
+    "record-type metadata instead of SuiteQL.",
+    "customer has NO address columns — city/state/country are not on the table "
+    "(they 400 or 500), and the address sub-tables (customeraddressbook / "
+    "customeraddressbookentityaddress) return zero rows for this read-only "
+    "role. The only geography on customer is 'thirdpartycountry' (a country "
+    "code like 'US'). For city/state/region filtering query Salesforce instead "
+    "(Account.BillingState, TVRS_Guest__c.City__c/Country__c) and join back to "
+    "NetSuite by email.",
 ]
 
 

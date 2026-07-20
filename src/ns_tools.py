@@ -8,7 +8,7 @@ from src.ns_client import (
 )
 from src.schema_cache import schema_cache
 from src.ns_schema import SCHEMA as NS_SCHEMA, GLOBAL_TIPS as NS_TIPS
-from src.query_validator import validate_suiteql, enhance_ns_error
+from src.query_validator import validate_suiteql, enhance_ns_error, rewrite_suiteql_limit
 
 
 def register_tools(mcp):
@@ -27,11 +27,12 @@ def register_tools(mcp):
         'balancesearch' / 'overduebalancesearch' (NOT 'balance').
 
         Row limiting: SuiteQL is Oracle SQL and does NOT support the MySQL-style
-        'LIMIT n' clause — appending "LIMIT 50" 400s with a syntax error near 'LIMIT'.
-        To cap rows, either write 'FETCH FIRST n ROWS ONLY' inside the SQL (e.g.
-        "... ORDER BY t.trandate DESC FETCH FIRST 50 ROWS ONLY", optionally after
-        'OFFSET n ROWS') or pass the 'limit' parameter below (which paginates
-        server-side).
+        'LIMIT n' clause. To cap rows, either write 'FETCH FIRST n ROWS ONLY'
+        inside the SQL (e.g. "... ORDER BY t.trandate DESC FETCH FIRST 50 ROWS
+        ONLY", optionally after 'OFFSET n ROWS') or pass the 'limit' parameter
+        below (which paginates server-side). A trailing 'LIMIT n [OFFSET m]' is
+        auto-rewritten to the Oracle form (with a warning); a LIMIT anywhere else
+        is rejected.
 
         Use ns_get_netsuite_schema to explore fields, tables, and example SuiteQL before querying.
 
@@ -50,6 +51,11 @@ def register_tools(mcp):
             If offset > 0: a dict with 'items', 'hasMore', 'offset', and 'totalResults'.
             On failure: a single-element list or dict with an error message.
         """
+        # A trailing MySQL-style 'LIMIT n [OFFSET m]' has unambiguous intent —
+        # translate it to Oracle syntax and carry a warning teaching the correct
+        # form, instead of failing the call.
+        query, rewrite_note = rewrite_suiteql_limit(query)
+
         # Pre-flight validation. Only findings the validator marks blocking (a
         # SQL LIMIT clause, which SuiteQL always rejects) short-circuit here so
         # the actionable message reaches the caller instead of a raw NetSuite
@@ -57,6 +63,8 @@ def register_tools(mcp):
         # advisory and the query still executes — the validator is regex-based
         # and can be wrong about unusual-but-valid SQL.
         validation = validate_suiteql(query)
+        if rewrite_note:
+            validation["warnings"].append(rewrite_note)
         if validation["blocking"]:
             msg = "; ".join(validation["warnings"])
             if validation["suggestions"]:

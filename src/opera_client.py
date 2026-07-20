@@ -31,6 +31,8 @@ import time
 import requests
 from dotenv import load_dotenv
 
+from src.errors import IntegrationDisabledError
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -188,7 +190,7 @@ def query(
             on auth/config errors, or after exhausting retries.
     """
     if not opera_enabled():
-        raise RuntimeError(
+        raise IntegrationDisabledError(
             "OPERA access is disabled (OPERA_TOOLS_ENABLED is off) — refusing to "
             "call opera-pms-api."
         )

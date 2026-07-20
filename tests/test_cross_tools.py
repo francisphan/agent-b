@@ -172,14 +172,16 @@ class TestGuest360:
 
 class TestPardotDisabled:
     """With PARDOT_TOOLS_ENABLED off, the composites' Pardot leg short-circuits at
-    the client (no HTTP/auth) and the composites degrade gracefully. Here the real
-    query_prospects runs — only Salesforce/NetSuite are mocked — so the client-level
-    guard is exercised end-to-end through the composite."""
+    the client (no HTTP/auth) and the leg is SKIPPED — not an error. Config state
+    must not land in _errors, or the usage log classifies the call as degraded.
+    Here the real query_prospects runs — only Salesforce/NetSuite are mocked — so
+    the client-level guard is exercised end-to-end through the composite."""
 
     @patch("src.cross_tools.suiteql_query")
     @patch("src.cross_tools.sf_query")
-    def test_guest_360_notes_pardot_disabled(self, mock_sf, mock_ns, monkeypatch):
+    def test_guest_360_skips_disabled_pardot(self, mock_sf, mock_ns, monkeypatch):
         monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "false")
+        monkeypatch.setenv("OPERA_TOOLS_ENABLED", "false")
         mock_sf.return_value = []
         mock_ns.return_value = []
 
@@ -187,15 +189,18 @@ class TestPardotDisabled:
 
         profile = guest_360("test@example.com")
 
-        assert "_errors" in profile
-        assert any("Pardot" in e and "disabled" in e for e in profile["_errors"])
+        assert "_skipped" in profile
+        assert any("Pardot" in s and "disabled" in s for s in profile["_skipped"])
+        # A disabled integration is not a failure — nothing lands in _errors
+        # (OPERA is also off in the test env, so it's skipped the same way).
+        assert "_errors" not in profile
         # The rest of the profile is still returned intact.
         assert profile["email"] == "test@example.com"
         assert "marketing" in profile
 
     @patch("src.cross_tools.suiteql_query")
     @patch("src.cross_tools.sf_query")
-    def test_lookup_guest_reports_pardot_disabled(self, mock_sf, mock_ns, monkeypatch):
+    def test_lookup_guest_reports_pardot_skipped(self, mock_sf, mock_ns, monkeypatch):
         monkeypatch.setenv("PARDOT_TOOLS_ENABLED", "false")
         mock_sf.return_value = []
         mock_ns.return_value = []
@@ -204,8 +209,9 @@ class TestPardotDisabled:
 
         result = lookup_guest("test@example.com")
 
-        assert "error" in result["pardot"]
-        assert "disabled" in result["pardot"]["error"]
+        assert "skipped" in result["pardot"]
+        assert "disabled" in result["pardot"]["skipped"]
+        assert "error" not in result["pardot"]
         # Other systems are unaffected.
         assert result["salesforce"] is not None
         assert result["netsuite"] is not None
