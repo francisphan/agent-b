@@ -1,0 +1,269 @@
+{
+  "auth_split": {
+    "none": 17,
+    "write": 91
+  },
+  "days": 7,
+  "generated_at": "2026-07-20T11:54:40.696003+00:00",
+  "per_client": [
+    {
+      "calls": 90,
+      "client": "sabueso",
+      "degraded": 7,
+      "errors": 27,
+      "top_tools": [
+        {
+          "calls": 42,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 15,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 11,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 17,
+      "client": "michael@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 2,
+      "top_tools": [
+        {
+          "calls": 9,
+          "tool": "sf_search"
+        },
+        {
+          "calls": 8,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "client": "francis.phan@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "sf_list_objects"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-07-14": 11,
+    "2026-07-15": 2,
+    "2026-07-16": 14,
+    "2026-07-17": 58,
+    "2026-07-20": 23
+  },
+  "per_end_user": [
+    {
+      "calls": 36,
+      "end_user": "U0AKA4Q68AH",
+      "top_tools": [
+        {
+          "calls": 13,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 12,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 4,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 27,
+      "end_user": "U90RX77FW",
+      "top_tools": [
+        {
+          "calls": 17,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 5,
+          "tool": "ns_rest_get"
+        },
+        {
+          "calls": 3,
+          "tool": "ns_get_netsuite_schema"
+        }
+      ]
+    },
+    {
+      "calls": 18,
+      "end_user": "U3P1DD89Z",
+      "top_tools": [
+        {
+          "calls": 10,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 8,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 2,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_soql_query"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "U06L80JUUD6",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 42,
+      "degraded": 0,
+      "errors": 20,
+      "p50_ms": 442.5,
+      "p95_ms": 2268.6999999999994,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 23,
+      "degraded": 6,
+      "errors": 0,
+      "p50_ms": 3099.0,
+      "p95_ms": 7262.499999999999,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 14,
+      "degraded": 0,
+      "errors": 2,
+      "p50_ms": 538.5,
+      "p95_ms": 6584.3,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 11,
+      "degraded": 0,
+      "errors": 2,
+      "p50_ms": 1940.0,
+      "p95_ms": 3149.0,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 8,
+      "degraded": 0,
+      "errors": 3,
+      "p50_ms": 2670.5,
+      "p95_ms": 6739.5,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 6,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "ns_get_netsuite_schema"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 1,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "ns_describe_record"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 1,
+      "p50_ms": 127.0,
+      "p95_ms": 127.0,
+      "tool": "ns_rest_list"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 830.0,
+      "p95_ms": 830.0,
+      "tool": "sf_list_objects"
+    },
+    {
+      "calls": 1,
+      "degraded": 1,
+      "errors": 0,
+      "p50_ms": 1848.0,
+      "p95_ms": 1848.0,
+      "tool": "guest_360_profile"
+    }
+  ],
+  "prev_totals": {
+    "calls": 80,
+    "degraded": 9,
+    "error": 17,
+    "error_rate": 0.2125,
+    "ok": 54
+  },
+  "since": "2026-07-14T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 7,
+      "error": "Pardot: Pardot tools are disabled (PARDOT_TOOLS_ENABLED is off) \u2014 refusing to call the Pardot API.; OPERA: OPERA access is disabled (OPERA_TOOLS_ENABLED is off) \u2014 refusing to call opera-pms-api."
+    },
+    {
+      "count": 3,
+      "error": "SuiteQL does not support the SQL 'LIMIT' keyword (it is Oracle SQL) \u2014 'LIMIT n' fails with a syntax error near 'LIMIT'. Suggestion: Use 'FETCH FIRST n ROWS ONLY' for a top-N (e.g. '... ORDER BY t.trandate DESC FETCH FIRST 50 ROWS ONLY'), or pass the ns_suiteql_query 'limit' parameter, which paginate\u2026 (+14 chars)"
+    },
+    {
+      "count": 3,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Record 'customlist' was not found."
+    },
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Unknown identifier '\"ID\"'. Available identifiers are: {customrecordtype=customrecordtype}."
+    },
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Record 'customercategory' was not found."
+    }
+  ],
+  "totals": {
+    "calls": 108,
+    "degraded": 7,
+    "error": 29,
+    "error_rate": 0.26851851851851855,
+    "ok": 72
+  },
+  "until": "2026-07-20T11:54:40.696003+00:00"
+}
