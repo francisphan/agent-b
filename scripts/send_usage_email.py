@@ -34,6 +34,7 @@ import base64
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -435,12 +436,52 @@ def _raise_for_status(resp, what: str) -> None:
     resp.raise_for_status()
 
 
+# Fetch retries: 1 initial attempt + 4 retries, backing off 60/120/240/480s
+# (~15 min total), sized for Railway edge blips rather than long outages.
+FETCH_ATTEMPTS = 5
+FETCH_BACKOFF_BASE_S = 60
+
+
+def _is_transient_fetch_failure(resp) -> bool:
+    """Whether this response is worth retrying.
+
+    5xx always is. A 404 is normally terminal (bad URL), but Railway's edge
+    serves 404 "Application not found" when the domain briefly isn't routing to
+    the (healthy) container — observed 2026-07-27, which cost that week's
+    report — so that specific body retries too.
+    """
+    if resp.status_code in (502, 503, 504):
+        return True
+    return resp.status_code == 404 and "Application not found" in (resp.text or "")
+
+
 def fetch_report(base_url: str, token: str | None, days: int) -> dict:
     url = base_url.rstrip("/") + "/usage/report"
     headers = {"Authorization": f"Bearer {token}"} if token else {}
-    resp = requests.get(url, params={"days": days}, headers=headers, timeout=60)
-    _raise_for_status(resp, "Fetching usage report")
-    return resp.json()
+    last_exc: Exception | None = None
+    resp = None
+    for attempt in range(FETCH_ATTEMPTS):
+        resp = None
+        try:
+            resp = requests.get(url, params={"days": days}, headers=headers, timeout=60)
+        except requests.RequestException as exc:
+            last_exc = exc
+        if resp is not None and not _is_transient_fetch_failure(resp):
+            _raise_for_status(resp, "Fetching usage report")
+            return resp.json()
+        if attempt + 1 < FETCH_ATTEMPTS:
+            delay = FETCH_BACKOFF_BASE_S * 2**attempt
+            detail = f"HTTP {resp.status_code}" if resp is not None else repr(last_exc)
+            print(
+                f"Fetching usage report: transient failure ({detail}); "
+                f"retrying in {delay}s (attempt {attempt + 1}/{FETCH_ATTEMPTS})",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+    if resp is not None:
+        _raise_for_status(resp, "Fetching usage report")
+    assert last_exc is not None
+    raise last_exc
 
 
 def get_access_token(client_id: str, client_secret: str, refresh_token: str) -> str:

@@ -143,3 +143,85 @@ class TestHelpers:
         assert "a@b.com, c@d.com" in decoded
         assert "text/plain" in decoded
         assert "text/html" in decoded
+
+
+class TestFetchRetry:
+    """fetch_report retries transient failures (Railway edge blips) with backoff."""
+
+    @pytest.fixture(autouse=True)
+    def _no_sleep(self, monkeypatch):
+        self.sleeps = []
+        monkeypatch.setattr(sue.time, "sleep", self.sleeps.append)
+
+    def _resp(self, status, body="", payload=None):
+        class Resp:
+            status_code = status
+            text = body
+
+            def json(self):
+                return payload
+
+            def raise_for_status(self):
+                if status >= 400:
+                    raise sue.requests.HTTPError(f"{status}", response=self)
+
+        return Resp()
+
+    def test_edge_404_retries_then_succeeds(self, monkeypatch):
+        responses = iter(
+            [
+                self._resp(404, '{"status":"error","message":"Application not found"}'),
+                self._resp(502),
+                self._resp(200, payload={"totals": {"calls": 1}}),
+            ]
+        )
+        monkeypatch.setattr(sue.requests, "get", lambda *a, **k: next(responses))
+        report = sue.fetch_report("https://x", "tok", 7)
+        assert report == {"totals": {"calls": 1}}
+        assert self.sleeps == [60, 120]
+
+    def test_connection_error_retries(self, monkeypatch):
+        calls = []
+
+        def get(*a, **k):
+            calls.append(1)
+            if len(calls) < 2:
+                raise sue.requests.ConnectionError("boom")
+            return self._resp(200, payload={})
+
+        monkeypatch.setattr(sue.requests, "get", get)
+        assert sue.fetch_report("https://x", None, 7) == {}
+        assert self.sleeps == [60]
+
+    def test_app_404_fails_immediately(self, monkeypatch):
+        monkeypatch.setattr(
+            sue.requests, "get", lambda *a, **k: self._resp(404, '{"error":"no such route"}')
+        )
+        with pytest.raises(sue.requests.HTTPError):
+            sue.fetch_report("https://x", "tok", 7)
+        assert self.sleeps == []
+
+    def test_401_fails_immediately(self, monkeypatch):
+        monkeypatch.setattr(sue.requests, "get", lambda *a, **k: self._resp(401, "unauthorized"))
+        with pytest.raises(sue.requests.HTTPError):
+            sue.fetch_report("https://x", "tok", 7)
+        assert self.sleeps == []
+
+    def test_exhausted_transient_raises_http_error(self, monkeypatch):
+        monkeypatch.setattr(
+            sue.requests,
+            "get",
+            lambda *a, **k: self._resp(404, "Application not found"),
+        )
+        with pytest.raises(sue.requests.HTTPError):
+            sue.fetch_report("https://x", "tok", 7)
+        assert self.sleeps == [60, 120, 240, 480]
+
+    def test_exhausted_connection_errors_reraise(self, monkeypatch):
+        def get(*a, **k):
+            raise sue.requests.ConnectionError("down")
+
+        monkeypatch.setattr(sue.requests, "get", get)
+        with pytest.raises(sue.requests.ConnectionError):
+            sue.fetch_report("https://x", "tok", 7)
+        assert self.sleeps == [60, 120, 240, 480]
