@@ -11,6 +11,11 @@ on:
   schedule:
     - cron: "0 11 * * 1"
   workflow_dispatch:
+    inputs:
+      days:
+        description: "Report window in days (e.g. 12 to backfill a missed week)"
+        required: false
+        default: "7"
 
 jobs:
   send:
@@ -34,9 +39,10 @@ jobs:
       - name: Send usage email and snapshot the report
         run: |
           DATE=$(date -u +%Y-%m-%d)
+          DAYS="${{ inputs.days || '7' }}"
           echo "SNAPSHOT_DATE=${DATE}" >> "$GITHUB_ENV"
           echo "SNAPSHOT_FILE=usage-reports/${DATE}.json" >> "$GITHUB_ENV"
-          python scripts/send_usage_email.py --save-json "usage-reports/${DATE}.json"
+          python scripts/send_usage_email.py --days "$DAYS" --save-json "usage-reports/${DATE}.json"
         env:
           AGENT_B_URL: ${{ secrets.AGENT_B_URL }}
           MCP_API_TOKEN: ${{ secrets.MCP_API_TOKEN }}
