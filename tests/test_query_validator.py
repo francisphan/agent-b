@@ -235,3 +235,49 @@ class TestEnhanceNsError:
         error = "Invalid table: custommer"
         enhanced = enhance_ns_error(error, "SELECT id FROM custommer")
         assert "customer" in enhanced
+
+    def test_unknown_identifier_type_on_item(self):
+        # The exact production failure (issue #48): the curated example taught
+        # WHERE type = 'InvtPart', and NetSuite quotes the identifier ('"TYPE"').
+        error = "Unknown identifier '\"TYPE\"'. Available identifiers are: {item=item}."
+        enhanced = enhance_ns_error(error, "SELECT id, itemid FROM item WHERE type = 'InvtPart'")
+        assert "itemtype" in enhanced
+
+    def test_unknown_identifier_quantityavailable_on_item(self):
+        error = "Unknown identifier 'quantityavailable'. Available identifiers are: {item=item}."
+        enhanced = enhance_ns_error(error, "SELECT id, quantityavailable FROM item")
+        assert "totalquantityonhand" in enhanced
+
+    def test_unknown_identifier_baseprice_points_at_pricing(self):
+        error = "Unknown identifier 'baseprice'. Available identifiers are: {item=item}."
+        enhanced = enhance_ns_error(error, "SELECT id, baseprice FROM item")
+        assert "pricing" in enhanced
+
+    def test_unknown_identifier_fuzzy_on_other_table(self):
+        # Non-item tables fall through to fuzzy matching against curated fields.
+        error = "Unknown identifier 'companynam'. Available identifiers are: {customer=customer}."
+        enhanced = enhance_ns_error(error, "SELECT id, companynam FROM customer")
+        assert "companyname" in enhanced.lower()
+
+    def test_unknown_identifier_no_match_points_at_schema_tool(self):
+        error = "Unknown identifier 'zzz_bogus'. Available identifiers are: {customer=customer}."
+        enhanced = enhance_ns_error(error, "SELECT id, zzz_bogus FROM customer")
+        assert "ns_get_netsuite_schema" in enhanced
+
+    def test_fetch_syntax_error_explains_real_cause(self):
+        # An unknown column + FETCH FIRST surfaces as a parse error near FETCH
+        # (verified live) — the enhancement must point at the column names.
+        error = (
+            "Failed to parse SQL [SELECT id, baseprice FROM item FETCH FIRST 3 ROWS ONLY]: "
+            "syntax error, state:0(10102) near: FETCH(1,40, token code:0)."
+        )
+        enhanced = enhance_ns_error(
+            error, "SELECT id, baseprice FROM item FETCH FIRST 3 ROWS ONLY"
+        )
+        assert "legacy parser" in enhanced
+
+    def test_fetch_error_without_fetch_in_query_not_flagged(self):
+        # Only add the FETCH hint when the query actually uses FETCH FIRST.
+        error = "syntax error near: FETCH"
+        enhanced = enhance_ns_error(error, "SELECT id FROM customer")
+        assert enhanced == error
