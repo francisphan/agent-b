@@ -105,6 +105,24 @@ _NON_FILTERABLE_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
+# SuiteQL tables that are 100% certain to fail in this account/role, verified
+# against live traffic — no SQL shape makes them work, so querying them blocks
+# pre-flight like LIMIT does. Two classes with different fixes:
+#
+# Metadata tables run on the legacy search engine with a restricted column
+# set — ordinary identifiers (id, label, fieldname) 400 with "Unknown
+# identifier", and FETCH FIRST is a syntax error there.
+_METADATA_TABLES = frozenset({"customfield", "customrecordtype"})
+
+# These 400 with "Record 'X' was not found": the integration role lacks the
+# Custom Lists permission (customlist*, customercategory, classification,
+# supportcategory) and has no employee access at all (SuiteQL AND REST both
+# refuse it — resolve employee references with BUILTIN.DF instead).
+_UNGRANTED_TABLES = frozenset(
+    {"customlist", "customercategory", "classification", "supportcategory", "employee"}
+)
+
+
 # ---------------------------------------------------------------------------
 # Public validation
 # ---------------------------------------------------------------------------
@@ -287,6 +305,40 @@ def validate_suiteql(query: str) -> dict:
     if not tables:
         result["valid"] = False
         result["warnings"].append("Could not parse FROM/JOIN clause — missing table name.")
+        return result
+
+    metadata_hits = sorted({t for t in tables if t in _METADATA_TABLES})
+    if metadata_hits:
+        result["valid"] = False
+        result["blocking"] = True
+        result["warnings"].append(
+            f"Metadata table(s) {', '.join(metadata_hits)} cannot be queried via SuiteQL "
+            "in this account — they run on the legacy search engine with a restricted "
+            "column set, so ordinary identifiers (id, label, fieldname) fail with "
+            '"Unknown identifier" and FETCH FIRST is a syntax error there.'
+        )
+        result["suggestions"].append(
+            "Use ns_get_record_schema(record_type=...) for field metadata and "
+            "ns_list_record_types() for record-type metadata instead of SuiteQL."
+        )
+        return result
+
+    ungranted_hits = sorted(
+        {t for t in tables if t in _UNGRANTED_TABLES or t.startswith("customlist_")}
+    )
+    if ungranted_hits:
+        result["valid"] = False
+        result["blocking"] = True
+        result["warnings"].append(
+            f"Table(s) {', '.join(ungranted_hits)} are not queryable by this integration "
+            "role — every query fails with \"Record 'X' was not found\" (the role lacks "
+            "the Custom Lists permission and has no employee access, via SuiteQL or REST)."
+        )
+        result["suggestions"].append(
+            "Do not JOIN these tables — resolve list/reference fields to display text "
+            "with BUILTIN.DF() instead, e.g. BUILTIN.DF(c.category) AS category or "
+            "BUILTIN.DF(c.salesrep) AS sales_rep on customer."
+        )
         return result
 
     known_tables = set()

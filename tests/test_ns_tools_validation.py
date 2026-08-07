@@ -41,6 +41,21 @@ class TestSuiteqlPreflight:
         assert "LIMIT" in result[0]["error"]
         assert "FETCH FIRST" in result[0]["error"]
 
+    def test_metadata_table_short_circuits_before_netsuite(self):
+        # Tables that are certain to 400 (issue #51) never reach NetSuite —
+        # the caller gets the redirect to the metadata tools instead.
+        with patch("src.ns_tools.suiteql_query") as mock_query:
+            result = _call("SELECT customtype, id FROM customrecordtype FETCH FIRST 20 ROWS ONLY")
+        mock_query.assert_not_called()
+        assert isinstance(result, list) and len(result) == 1
+        assert "ns_get_record_schema" in result[0]["error"]
+
+    def test_ungranted_table_short_circuits_before_netsuite(self):
+        with patch("src.ns_tools.suiteql_query") as mock_query:
+            result = _call("SELECT id, entityid FROM employee")
+        mock_query.assert_not_called()
+        assert "BUILTIN.DF" in result[0]["error"]
+
     def test_advisory_findings_still_execute(self):
         # An unextractable FROM (quoted identifier) is advisory, not blocking:
         # the query must still reach NetSuite.
