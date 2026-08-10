@@ -1,0 +1,287 @@
+{
+  "auth_split": {
+    "none": 4,
+    "write": 99
+  },
+  "days": 7,
+  "generated_at": "2026-08-10T11:21:53.420356+00:00",
+  "per_client": [
+    {
+      "calls": 67,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 5,
+      "top_tools": [
+        {
+          "calls": 34,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 15,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 7,
+          "tool": "wine_owner_lookup"
+        }
+      ]
+    },
+    {
+      "calls": 32,
+      "client": "francis.phan@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 8,
+      "top_tools": [
+        {
+          "calls": 24,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 5,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_describe_object"
+        }
+      ]
+    },
+    {
+      "calls": 4,
+      "client": "christian.stoddart@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-08-04": 18,
+    "2026-08-05": 1,
+    "2026-08-06": 6,
+    "2026-08-07": 74,
+    "2026-08-09": 4
+  },
+  "per_end_user": [
+    {
+      "calls": 36,
+      "end_user": "U0AKA4Q68AH",
+      "top_tools": [
+        {
+          "calls": 18,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 9,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 3,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 11,
+      "end_user": "U06L80JUUD6",
+      "top_tools": [
+        {
+          "calls": 9,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "wine_owner_lookup"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 10,
+      "end_user": "U0BBPLUK6KV",
+      "top_tools": [
+        {
+          "calls": 5,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 6,
+      "end_user": "U31LAQQ8P",
+      "top_tools": [
+        {
+          "calls": 4,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 3,
+      "end_user": "U0ACKBHM2S1",
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "wine_owner_lookup"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "U08KWHQUY0Y",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 58,
+      "degraded": 0,
+      "errors": 12,
+      "p50_ms": 572.0,
+      "p95_ms": 2974.3499999999995,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 15,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 5028.0,
+      "p95_ms": 7000.0999999999985,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 8,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 216.5,
+      "p95_ms": 599.3499999999999,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 7,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 3194.0,
+      "p95_ms": 5448.9,
+      "tool": "wine_owner_lookup"
+    },
+    {
+      "calls": 5,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 638.0,
+      "p95_ms": 1112.3999999999999,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 4,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2563.0,
+      "p95_ms": 3112.6,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 867.5,
+      "p95_ms": 889.55,
+      "tool": "sf_find_by_email"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 521.0,
+      "p95_ms": 586.6999999999999,
+      "tool": "sf_describe_object"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 610.0,
+      "p95_ms": 610.0,
+      "tool": "guest_360_profile"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 1,
+      "p50_ms": 142.0,
+      "p95_ms": 142.0,
+      "tool": "ns_rest_list"
+    }
+  ],
+  "prev_totals": {
+    "calls": 65,
+    "degraded": 0,
+    "error": 10,
+    "error_rate": 0.15384615384615385,
+    "ok": 55
+  },
+  "since": "2026-08-04T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Record 'employee' was not found."
+    },
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Invalid or unsupported search."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Failed to parse SQL [SELECT id, itemid, displayname, description, itemtype, baseprice FROM item WHERE isinactive = 'F' ORDER BY itemid FETCH FIRST 5 ROWS ONLY]: syntax error, state:0(10102) near: FETC\u2026 (+23 chars)"
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Failed to parse SQL [SELECT id, itemid, baseprice FROM item FETCH FIRST 3 ROWS ONLY]: syntax error, state:0(10102) near: FETCH(1,40, token code:0)."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid limit and offset values. The offset 1 must be divisible by the page limit 3."
+    }
+  ],
+  "totals": {
+    "calls": 103,
+    "degraded": 0,
+    "error": 13,
+    "error_rate": 0.1262135922330097,
+    "ok": 90
+  },
+  "until": "2026-08-10T11:21:53.420356+00:00"
+}
