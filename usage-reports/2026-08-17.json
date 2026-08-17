@@ -1,0 +1,236 @@
+{
+  "auth_split": {
+    "none": 2,
+    "write": 62
+  },
+  "days": 7,
+  "generated_at": "2026-08-17T11:15:53.622198+00:00",
+  "per_client": [
+    {
+      "calls": 62,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 9,
+      "top_tools": [
+        {
+          "calls": 35,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 15,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 5,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 2,
+      "client": "michael@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "sf_get_schema"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_soql_query"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-08-12": 14,
+    "2026-08-13": 12,
+    "2026-08-14": 34,
+    "2026-08-17": 4
+  },
+  "per_end_user": [
+    {
+      "calls": 23,
+      "end_user": "U06L80JUUD6",
+      "top_tools": [
+        {
+          "calls": 18,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "ns_get_netsuite_schema"
+        },
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 15,
+      "end_user": "U0BBPLUK6KV",
+      "top_tools": [
+        {
+          "calls": 6,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 5,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 11,
+      "end_user": "U0AKA4Q68AH",
+      "top_tools": [
+        {
+          "calls": 4,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 4,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 9,
+      "end_user": "UMZ3K2ED7",
+      "top_tools": [
+        {
+          "calls": 8,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_get_netsuite_schema"
+        }
+      ]
+    },
+    {
+      "calls": 4,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 4,
+          "tool": "person_brief"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 35,
+      "degraded": 0,
+      "errors": 9,
+      "p50_ms": 1034.0,
+      "p95_ms": 2897.6,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 15,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 3695.0,
+      "p95_ms": 7363.099999999997,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 5,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 726.0,
+      "p95_ms": 765.6,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 3,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "ns_get_netsuite_schema"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2752.5,
+      "p95_ms": 2758.35,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 385.5,
+      "p95_ms": 583.05,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "sf_get_schema"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 827.0,
+      "p95_ms": 827.0,
+      "tool": "sf_find_by_email"
+    }
+  ],
+  "prev_totals": {
+    "calls": 109,
+    "degraded": 0,
+    "error": 15,
+    "error_rate": 0.13761467889908258,
+    "ok": 94
+  },
+  "since": "2026-08-11T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 3,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Invalid or unsupported search."
+    },
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Unknown identifier '\"TYPE\"'. Available identifiers are: {item=item}."
+    },
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Unknown identifier 'baseprice'. Available identifiers are: {item=item}."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Unknown identifier 'balance'. Available identifiers are: {customer=customer}."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Record 'employee' was not found."
+    }
+  ],
+  "totals": {
+    "calls": 64,
+    "degraded": 0,
+    "error": 9,
+    "error_rate": 0.140625,
+    "ok": 55
+  },
+  "until": "2026-08-17T11:15:53.622198+00:00"
+}
