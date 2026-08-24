@@ -1,0 +1,206 @@
+{
+  "auth_split": {
+    "write": 60
+  },
+  "days": 7,
+  "generated_at": "2026-08-24T11:18:00.422914+00:00",
+  "per_client": [
+    {
+      "calls": 60,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 6,
+      "top_tools": [
+        {
+          "calls": 23,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 16,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 9,
+          "tool": "sf_search"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-08-18": 5,
+    "2026-08-19": 52,
+    "2026-08-21": 3
+  },
+  "per_end_user": [
+    {
+      "calls": 35,
+      "end_user": "U0AKA4Q68AH",
+      "top_tools": [
+        {
+          "calls": 15,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 10,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 6,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 13,
+      "end_user": "U0BBPLUK6KV",
+      "top_tools": [
+        {
+          "calls": 7,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_search"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_soql_query"
+        }
+      ]
+    },
+    {
+      "calls": 7,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 5,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 3,
+      "end_user": "U087HK4EKT7",
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "wine_owner_lookup"
+        }
+      ]
+    },
+    {
+      "calls": 2,
+      "end_user": "U02PFAD5EKC",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "wine_owner_lookup"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 23,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 3011.0,
+      "p95_ms": 9623.5,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 16,
+      "degraded": 0,
+      "errors": 6,
+      "p50_ms": 1086.5,
+      "p95_ms": 1668.75,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 9,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 593.0,
+      "p95_ms": 832.0,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 4,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 5873.5,
+      "p95_ms": 10164.55,
+      "tool": "wine_owner_lookup"
+    },
+    {
+      "calls": 3,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2888.0,
+      "p95_ms": 4921.099999999999,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 864.5,
+      "p95_ms": 879.3499999999999,
+      "tool": "sf_find_by_email"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 196.0,
+      "p95_ms": 203.2,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2490.0,
+      "p95_ms": 2490.0,
+      "tool": "guest_360_profile"
+    }
+  ],
+  "prev_totals": {
+    "calls": 65,
+    "degraded": 0,
+    "error": 10,
+    "error_rate": 0.15384615384615385,
+    "ok": 55
+  },
+  "since": "2026-08-18T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 5,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Invalid or unsupported search."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Unknown identifier 'balance'. Available identifiers are: {customer=customer}."
+    }
+  ],
+  "totals": {
+    "calls": 60,
+    "degraded": 0,
+    "error": 6,
+    "error_rate": 0.1,
+    "ok": 54
+  },
+  "until": "2026-08-24T11:18:00.422914+00:00"
+}
