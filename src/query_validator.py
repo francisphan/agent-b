@@ -294,6 +294,10 @@ def validate_suiteql(query: str) -> dict:
         known_tables.add(name.lower())
         known_tables.add(schema.get("suiteql_table", name).lower())
     known_tables.add("transactionline")
+    # Taught by the item entry's examples/notes (issue #48) but not curated
+    # entries of their own.
+    known_tables.add("pricing")
+    known_tables.add("aggregateitemlocation")
 
     for table in tables:
         if table not in known_tables:
@@ -341,9 +345,67 @@ def enhance_sf_error(error_message: str, soql: str) -> str:
     return error_message
 
 
+# Recurring bad item columns from production traffic (issue #48) — each maps
+# straight to the working alternative, verified against the live account.
+_ITEM_COLUMN_FIXES: dict[str, str] = {
+    "type": (
+        "On 'item' the subtype column is 'itemtype' (InvtPart, NonInvtPart, "
+        "Assembly, Service, ...) — 'type' does not exist there."
+    ),
+    "quantityavailable": (
+        "On 'item' use 'totalquantityonhand' for stock on hand; per-location "
+        "availability lives in the aggregateitemlocation table."
+    ),
+    "quantityonorder": (
+        "'quantityonorder' is not a SuiteQL column on 'item' — use "
+        "'totalquantityonhand' for stock on hand."
+    ),
+    "baseprice": (
+        "Prices are not columns on 'item' — join the 'pricing' table "
+        "(columns: item, pricelevel, unitprice)."
+    ),
+}
+
+
 def enhance_ns_error(error_message: str, query: str) -> str:
     """Enhance a NetSuite API error message with actionable suggestions."""
     suggestions = []
+
+    # NetSuite's actual wording for a bad column: "Unknown identifier 'X'.
+    # Available identifiers are: {...}". The identifier is sometimes wrapped in
+    # literal double quotes ('"TYPE"').
+    unknown_match = re.search(r"Unknown identifier '\"?([\w$]+)\"?'", error_message)
+    if unknown_match:
+        bad_field = unknown_match.group(1).lower()
+        tables = _extract_suiteql_tables(query)
+        if "item" in tables and bad_field in _ITEM_COLUMN_FIXES:
+            suggestions.append(_ITEM_COLUMN_FIXES[bad_field])
+        else:
+            for table in tables:
+                known = _get_ns_field_names(table)
+                if known:
+                    close = _fuzzy_suggest(bad_field, known, cutoff=0.4)
+                    if close:
+                        suggestions.append(f"On '{table}': did you mean {', '.join(close)}?")
+            if not suggestions:
+                suggestions.append(
+                    "Use ns_get_netsuite_schema() to see the queryable SuiteQL "
+                    "columns — they differ from the REST field names."
+                )
+
+    # An unknown column in a query that also has FETCH FIRST is reported by
+    # NetSuite as a syntax error near FETCH: the unknown identifier silently
+    # routes the query to the legacy parser, which doesn't support FETCH. The
+    # FETCH clause is almost never the real problem.
+    if re.search(r"syntax error.*near:\s*FETCH", error_message, re.IGNORECASE) and re.search(
+        r"\bFETCH\s+FIRST\b", query, re.IGNORECASE
+    ):
+        suggestions.append(
+            'A "syntax error near FETCH" usually means some OTHER identifier in '
+            "the query is invalid — an unknown column routes the query to "
+            "NetSuite's legacy parser, which rejects FETCH. Verify every column "
+            "with ns_get_netsuite_schema() before rewriting the FETCH clause."
+        )
 
     # "Invalid search column" or "field not found"
     field_match = re.search(
