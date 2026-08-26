@@ -324,26 +324,19 @@ SCHEMA: dict[str, dict] = {
     },
     "employee": {
         "label": "Employee",
-        "description": "Staff records. Referenced as salesRep on customers and transactions.",
-        "rest_type": "employee",
-        "key_fields": [
-            {"name": "id", "type": "integer"},
-            {"name": "entityId", "type": "string"},
-            {"name": "firstName", "type": "string"},
-            {"name": "lastName", "type": "string"},
-            {"name": "email", "type": "string"},
-            {"name": "title", "type": "string"},
-            {"name": "department", "type": "reference"},
-            {"name": "supervisor", "type": "reference"},
-            {"name": "isInactive", "type": "boolean"},
-        ],
-        "suiteql_table": "employee",
+        "description": (
+            "Staff records, referenced as salesRep on customers and transactions. "
+            "NOT accessible to this integration role: SuiteQL and REST both refuse "
+            "the employee record (\"Record 'employee' was not found\"), so there is "
+            "no direct employee query path. Resolve employee references on other "
+            "records to display names with BUILTIN.DF() instead."
+        ),
+        "key_fields": [],
         "example_suiteql": [
             (
-                "SELECT id, entityid, firstname, lastname, email, title "
-                "FROM employee "
-                "WHERE isinactive = 'F' "
-                "ORDER BY lastname, firstname"
+                "SELECT id, entityid, BUILTIN.DF(salesrep) AS sales_rep "
+                "FROM customer "
+                "WHERE salesrep IS NOT NULL"
             ),
         ],
     },
