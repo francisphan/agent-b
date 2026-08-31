@@ -1,0 +1,206 @@
+{
+  "auth_split": {
+    "write": 51
+  },
+  "days": 7,
+  "generated_at": "2026-08-31T17:45:16.055595+00:00",
+  "per_client": [
+    {
+      "calls": 51,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 3,
+      "top_tools": [
+        {
+          "calls": 19,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 14,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 10,
+          "tool": "person_brief"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-08-25": 7,
+    "2026-08-27": 5,
+    "2026-08-28": 34,
+    "2026-08-29": 3,
+    "2026-08-31": 2
+  },
+  "per_end_user": [
+    {
+      "calls": 24,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 14,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 10,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 10,
+      "end_user": "U0AKA4Q68AH",
+      "top_tools": [
+        {
+          "calls": 4,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 3,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 8,
+      "end_user": "U087HK4EKT7",
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "wine_owner_lookup"
+        },
+        {
+          "calls": 3,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 5,
+      "end_user": "U0BBPLUK6KV",
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_rest_get"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 3,
+      "end_user": "U05F1FRTA5V",
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "U08KWHQUY0Y",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 19,
+      "degraded": 0,
+      "errors": 2,
+      "p50_ms": 1194.0,
+      "p95_ms": 2273.7,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 14,
+      "degraded": 0,
+      "errors": 1,
+      "p50_ms": 347.0,
+      "p95_ms": 2799.099999999998,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 10,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 7355.0,
+      "p95_ms": 10802.649999999998,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 3,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 3913.0,
+      "p95_ms": 4169.5,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 3,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2853.0,
+      "p95_ms": 9166.5,
+      "tool": "wine_owner_lookup"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 601.5,
+      "p95_ms": 649.65,
+      "tool": "sf_search"
+    }
+  ],
+  "prev_totals": {
+    "calls": 69,
+    "degraded": 0,
+    "error": 7,
+    "error_rate": 0.10144927536231885,
+    "ok": 62
+  },
+  "since": "2026-08-25T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Invalid or unsupported search."
+    },
+    {
+      "count": 1,
+      "error": "Malformed request https://thevinesofmendoza2.my.salesforce.com/services/data/v59.0/query/?q=SELECT+AccountId%2C+Account.Name%2C+Account.PersonEmail%2C+Account.BillingCity%2C+Account.BillingCountry%2C+Name%2C+StageName+FROM+Opportunity+WHERE+IsWon+%3D+true+AND+RecordType.Name+LIKE+%27%25Vineyard%25%2\u2026 (+557 chars)"
+    }
+  ],
+  "totals": {
+    "calls": 51,
+    "degraded": 0,
+    "error": 3,
+    "error_rate": 0.058823529411764705,
+    "ok": 48
+  },
+  "until": "2026-08-31T17:45:16.055595+00:00"
+}
