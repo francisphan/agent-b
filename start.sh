@@ -1,24 +1,37 @@
 #!/usr/bin/env sh
 # Entrypoint for the agent-b Railway service.
 #
-# If TS_AUTHKEY is set, brings up Tailscale in userspace-networking mode with a
-# SOCKS5 proxy on localhost:${SOCKS_PORT}. opera_client routes ONLY its OPERA
-# API calls through that proxy (set OPERA_API_PROXY=socks5h://localhost:PORT),
-# reaching the opera-pms-api service at OPERA_API_BASE_URL over the tailnet. All
-# other upstreams (Salesforce/NetSuite/Pardot) connect directly, unproxied.
+# If OPERA access is on (OPERA_TOOLS_ENABLED truthy) and TS_AUTHKEY is set,
+# brings up Tailscale in userspace-networking mode with a SOCKS5 proxy on
+# localhost:${SOCKS_PORT}. opera_client routes ONLY its OPERA API calls through
+# that proxy (set OPERA_API_PROXY=socks5h://localhost:PORT), reaching the
+# opera-pms-api service at OPERA_API_BASE_URL over the tailnet. All other
+# upstreams (Salesforce/NetSuite/Pardot) connect directly, unproxied.
+#
+# The tunnel is strictly best-effort: it serves nothing but the OPERA leg, so a
+# failure to bring it up (expired/revoked TS_AUTHKEY, control-plane outage) logs
+# a warning and the MCP server starts anyway. An invalid key must never take
+# down Salesforce/NetSuite/Pardot — on 2026-08-31 it did exactly that (issue
+# #61): `tailscale up` failed under `set -e`, the container crash-looped before
+# uvicorn ever ran, and the deploy's healthcheck failure left the service down.
 #
 # Using socks5h:// means hostname resolution happens at the tailscaled end, so
 # the service's MagicDNS name (e.g. tvrspms.<tailnet>.ts.net) resolves over the
 # tailnet even with --accept-dns=false.
-#
-# If TS_AUTHKEY is not set (local dev with a direct route to the API, or no OPERA
-# integration), skips Tailscale entirely.
 
 set -e
 
 SOCKS_PORT="${TS_SOCKS_PORT:-1055}"
 
-if [ -n "${TS_AUTHKEY}" ]; then
+# Mirror opera_client.opera_enabled(): truthy is a trimmed, case-insensitive
+# "1"/"true"/"yes". When the flag is off, query() refuses every OPERA call
+# (composites included), so a tunnel would carry zero traffic — skip it.
+opera_on=false
+case "$(printf '%s' "${OPERA_TOOLS_ENABLED:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
+    1|true|yes) opera_on=true ;;
+esac
+
+if [ "${opera_on}" = "true" ] && [ -n "${TS_AUTHKEY}" ]; then
     echo "[start.sh] Starting tailscaled (userspace-networking, SOCKS5 on :${SOCKS_PORT})"
     /usr/sbin/tailscaled \
         --tun=userspace-networking \
@@ -35,13 +48,20 @@ if [ -n "${TS_AUTHKEY}" ]; then
     done
 
     echo "[start.sh] Bringing tailnet up"
-    tailscale up \
+    if tailscale up \
         --authkey="${TS_AUTHKEY}" \
         --hostname="agent-b-${RAILWAY_REPLICA_ID:-$(hostname)}" \
-        --accept-dns=false
-
-    echo "[start.sh] Tailnet up. opera_client reaches OPERA_API_BASE_URL via SOCKS5"
-    echo "           (ensure OPERA_API_PROXY=socks5h://localhost:${SOCKS_PORT})."
+        --accept-dns=false; then
+        echo "[start.sh] Tailnet up. opera_client reaches OPERA_API_BASE_URL via SOCKS5"
+        echo "           (ensure OPERA_API_PROXY=socks5h://localhost:${SOCKS_PORT})."
+    else
+        echo "[start.sh] WARNING: tailscale up failed (expired/invalid TS_AUTHKEY?)."
+        echo "           Continuing WITHOUT the tunnel: OPERA calls will fail until the"
+        echo "           key is replaced; Salesforce/NetSuite/Pardot are unaffected."
+    fi
+elif [ -n "${TS_AUTHKEY}" ]; then
+    echo "[start.sh] TS_AUTHKEY is set but OPERA_TOOLS_ENABLED is off — skipping"
+    echo "           Tailscale (the tunnel only serves the OPERA path)."
 else
     echo "[start.sh] TS_AUTHKEY not set — skipping Tailscale. OPERA tools expect a"
     echo "           direct route to OPERA_API_BASE_URL (and no OPERA_API_PROXY)."
