@@ -1,0 +1,110 @@
+{
+  "auth_split": {
+    "write": 6
+  },
+  "days": 7,
+  "generated_at": "2026-09-07T16:11:32.178629+00:00",
+  "per_client": [
+    {
+      "calls": 6,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 1,
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 2,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-09-07": 6
+  },
+  "per_end_user": [
+    {
+      "calls": 5,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 2,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "U0BBPLUK6KV",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 3,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 7548.0,
+      "p95_ms": 8001.6,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 1,
+      "p50_ms": 651.5,
+      "p95_ms": 750.05,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 585.0,
+      "p95_ms": 585.0,
+      "tool": "sf_search"
+    }
+  ],
+  "prev_totals": {
+    "calls": 51,
+    "degraded": 0,
+    "error": 3,
+    "error_rate": 0.058823529411764705,
+    "ok": 48
+  },
+  "since": "2026-09-01T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Unknown identifier 'defaultaddress'. Available identifiers are: {customer=customer}."
+    }
+  ],
+  "totals": {
+    "calls": 6,
+    "degraded": 0,
+    "error": 1,
+    "error_rate": 0.16666666666666666,
+    "ok": 5
+  },
+  "until": "2026-09-07T16:11:32.178629+00:00"
+}
