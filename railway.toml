@@ -1,5 +1,16 @@
 [build]
 builder = "dockerfile"
+# Only ship-relevant paths trigger an auto-deploy. Notably excludes
+# usage-reports/**: the weekly snapshot commit used to redeploy prod every
+# Monday — that pointless redeploy is what turned an expired TS_AUTHKEY into
+# the 2026-08-31 outage (issue #61).
+watchPatterns = [
+    "src/**",
+    "Dockerfile",
+    "start.sh",
+    "pyproject.toml",
+    "railway.toml",
+]
 
 [deploy]
 healthcheckPath = "/health"
