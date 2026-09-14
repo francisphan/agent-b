@@ -1,0 +1,240 @@
+{
+  "auth_split": {
+    "none": 21,
+    "write": 31
+  },
+  "days": 7,
+  "generated_at": "2026-09-14T16:40:55.539880+00:00",
+  "per_client": [
+    {
+      "calls": 31,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 10,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 8,
+          "tool": "wine_owner_lookup"
+        },
+        {
+          "calls": 7,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 18,
+      "client": "michael@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 9,
+      "top_tools": [
+        {
+          "calls": 16,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_get_netsuite_schema"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_get_record_schema"
+        }
+      ]
+    },
+    {
+      "calls": 3,
+      "client": "christian.stoddart@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "sf_soql_query"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-09-08": 21,
+    "2026-09-09": 10,
+    "2026-09-11": 5,
+    "2026-09-12": 3,
+    "2026-09-13": 11,
+    "2026-09-14": 2
+  },
+  "per_end_user": [
+    {
+      "calls": 14,
+      "end_user": "U0BBPLUK6KV",
+      "top_tools": [
+        {
+          "calls": 7,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 3,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_soql_query"
+        }
+      ]
+    },
+    {
+      "calls": 12,
+      "end_user": "U0AJX9F7TPS",
+      "top_tools": [
+        {
+          "calls": 6,
+          "tool": "wine_owner_lookup"
+        },
+        {
+          "calls": 3,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 2,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 3,
+      "end_user": "U06L80JUUD6",
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "wine_owner_lookup"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 2,
+      "end_user": "U0AKA4Q68AH",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_rest_get"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 26,
+      "degraded": 0,
+      "errors": 9,
+      "p50_ms": 1484.5,
+      "p95_ms": 12814.0,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 8,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 1677.5,
+      "p95_ms": 11271.899999999996,
+      "tool": "wine_owner_lookup"
+    },
+    {
+      "calls": 7,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 5215.0,
+      "p95_ms": 9607.499999999996,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 5,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 468.0,
+      "p95_ms": 1056.1999999999998,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 3257.5,
+      "p95_ms": 4509.85,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 646.0,
+      "p95_ms": 803.5,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "ns_get_netsuite_schema"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2303.0,
+      "p95_ms": 2303.0,
+      "tool": "ns_get_record_schema"
+    }
+  ],
+  "prev_totals": {
+    "calls": 12,
+    "degraded": 0,
+    "error": 1,
+    "error_rate": 0.08333333333333333,
+    "ok": 11
+  },
+  "since": "2026-09-08T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 1,
+      "error": "Internal Server Error: An unexpected error occurred. Error ID: mtsvfumw1w9uxt0qyle9a"
+    },
+    {
+      "count": 1,
+      "error": "Internal Server Error: An unexpected error occurred. Error ID: mtsvg3821b58efl9s9dd6"
+    },
+    {
+      "count": 1,
+      "error": "Internal Server Error: An unexpected error occurred. Error ID: mtsvggti1m4h0k89ibx6p"
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Failed to parse SQL [SELECT id, foreignamountremaining FROM transaction WHERE type = 'CustInvc' FETCH FIRST 3 ROWS ONLY]: syntax error, state:0(10102) near: FETCH(1,76, token code:0)."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid limit and offset values. The offset 1 must be divisible by the page limit 3."
+    }
+  ],
+  "totals": {
+    "calls": 52,
+    "degraded": 0,
+    "error": 9,
+    "error_rate": 0.17307692307692307,
+    "ok": 43
+  },
+  "until": "2026-09-14T16:40:55.539880+00:00"
+}
