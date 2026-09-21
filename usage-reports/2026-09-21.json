@@ -1,0 +1,118 @@
+{
+  "auth_split": {
+    "write": 14
+  },
+  "days": 7,
+  "generated_at": "2026-09-21T16:41:40.579193+00:00",
+  "per_client": [
+    {
+      "calls": 14,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 6,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 4,
+          "tool": "sf_search"
+        },
+        {
+          "calls": 2,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-09-18": 2,
+    "2026-09-21": 12
+  },
+  "per_end_user": [
+    {
+      "calls": 12,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 5,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 3,
+          "tool": "sf_search"
+        },
+        {
+          "calls": 2,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 2,
+      "end_user": "U0BBPLUK6KV",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 6,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 7080.5,
+      "p95_ms": 9222.5,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 4,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 547.5,
+      "p95_ms": 942.0999999999999,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 1250.5,
+      "p95_ms": 1844.9499999999998,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 3194.0,
+      "p95_ms": 3887.9,
+      "tool": "ns_rest_get"
+    }
+  ],
+  "prev_totals": {
+    "calls": 53,
+    "degraded": 0,
+    "error": 9,
+    "error_rate": 0.16981132075471697,
+    "ok": 44
+  },
+  "since": "2026-09-15T00:00:00+00:00",
+  "top_errors": [],
+  "totals": {
+    "calls": 14,
+    "degraded": 0,
+    "error": 0,
+    "error_rate": 0.0,
+    "ok": 14
+  },
+  "until": "2026-09-21T16:41:40.579193+00:00"
+}
