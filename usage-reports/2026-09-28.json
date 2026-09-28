@@ -1,0 +1,316 @@
+{
+  "auth_split": {
+    "none": 357,
+    "write": 163
+  },
+  "days": 7,
+  "generated_at": "2026-09-28T18:18:17.032473+00:00",
+  "per_client": [
+    {
+      "calls": 328,
+      "client": "michael@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 38,
+      "top_tools": [
+        {
+          "calls": 164,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 79,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 50,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 163,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 3,
+      "top_tools": [
+        {
+          "calls": 119,
+          "tool": "sf_search"
+        },
+        {
+          "calls": 25,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 13,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 29,
+      "client": "christian.stoddart@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 2,
+      "top_tools": [
+        {
+          "calls": 28,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_update_record"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-09-22": 1,
+    "2026-09-23": 393,
+    "2026-09-24": 114,
+    "2026-09-25": 2,
+    "2026-09-26": 1,
+    "2026-09-28": 9
+  },
+  "per_end_user": [
+    {
+      "calls": 129,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 116,
+          "tool": "sf_search"
+        },
+        {
+          "calls": 13,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 14,
+      "end_user": "U31LAQQ8P",
+      "top_tools": [
+        {
+          "calls": 8,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 3,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 3,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 8,
+      "end_user": "U0AJX9F7TPS",
+      "top_tools": [
+        {
+          "calls": 5,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "wine_owner_lookup"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 5,
+      "end_user": "U03NBQWL7HR",
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 4,
+      "end_user": "U0BBPLUK6KV",
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "U0VG1L71Q",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "UDN3L717W",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "U087HK4EKT7",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "wine_owner_lookup"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 177,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 717.0,
+      "p95_ms": 5510.799999999998,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 169,
+      "degraded": 0,
+      "errors": 2,
+      "p50_ms": 385.0,
+      "p95_ms": 1172.6,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 107,
+      "degraded": 0,
+      "errors": 27,
+      "p50_ms": 155.0,
+      "p95_ms": 766.2999999999996,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 30,
+      "degraded": 0,
+      "errors": 3,
+      "p50_ms": 465.5,
+      "p95_ms": 1644.1499999999985,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 27,
+      "degraded": 0,
+      "errors": 10,
+      "p50_ms": 164.0,
+      "p95_ms": 303.09999999999997,
+      "tool": "sf_get_record"
+    },
+    {
+      "calls": 4,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 3004.0,
+      "p95_ms": 4827.9,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 7132.0,
+      "p95_ms": 11049.7,
+      "tool": "wine_owner_lookup"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 682.0,
+      "p95_ms": 682.0,
+      "tool": "sf_describe_object"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 1,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "sf_update_record"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2774.0,
+      "p95_ms": 2774.0,
+      "tool": "lookup_guest_by_email"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "sf_get_schema"
+    }
+  ],
+  "prev_totals": {
+    "calls": 19,
+    "degraded": 0,
+    "error": 0,
+    "error_rate": 0.0,
+    "ok": 19
+  },
+  "since": "2026-09-22T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 25,
+      "error": "Either query_str or next_records_url must be provided."
+    },
+    {
+      "count": 1,
+      "error": "Provide either sosl_query or search_term."
+    },
+    {
+      "count": 1,
+      "error": "Error executing tool sf_get_record: 1 validation error for sf_get_recordArguments\nobject_name\n  Field required [type=missing, input_value={'object_type': 'Account'...': '0018b00002EhuhwAAB'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+    },
+    {
+      "count": 1,
+      "error": "Error executing tool sf_get_record: 1 validation error for sf_get_recordArguments\nobject_name\n  Field required [type=missing, input_value={'object_type': 'Account'...': '0018b000027HxElAAK'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+    },
+    {
+      "count": 1,
+      "error": "Error executing tool sf_get_record: 1 validation error for sf_get_recordArguments\nobject_name\n  Field required [type=missing, input_value={'object_type': 'Account'...': '0018b000027Hyt6AAC'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"
+    }
+  ],
+  "totals": {
+    "calls": 520,
+    "degraded": 0,
+    "error": 43,
+    "error_rate": 0.08269230769230769,
+    "ok": 477
+  },
+  "until": "2026-09-28T18:18:17.032473+00:00"
+}
