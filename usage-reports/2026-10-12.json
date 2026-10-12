@@ -1,0 +1,167 @@
+{
+  "auth_split": {
+    "none": 14,
+    "write": 5
+  },
+  "days": 7,
+  "generated_at": "2026-10-12T20:02:51.747608+00:00",
+  "per_client": [
+    {
+      "calls": 7,
+      "client": "christian.stoddart@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 7,
+          "tool": "sf_soql_query"
+        }
+      ]
+    },
+    {
+      "calls": 7,
+      "client": "s2s-read",
+      "degraded": 0,
+      "errors": 3,
+      "top_tools": [
+        {
+          "calls": 7,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 4,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "client": "francis.phan@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "sf_get_limits"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-10-06": 7,
+    "2026-10-07": 1,
+    "2026-10-09": 3,
+    "2026-10-11": 7,
+    "2026-10-12": 1
+  },
+  "per_end_user": [
+    {
+      "calls": 3,
+      "end_user": "U0VG1L71Q",
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "U0AKA4Q68AH",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 7,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 359.0,
+      "p95_ms": 627.9999999999998,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 7,
+      "degraded": 0,
+      "errors": 3,
+      "p50_ms": 602.0,
+      "p95_ms": 8004.299999999994,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 3,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 5080.0,
+      "p95_ms": 6268.0,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 7458.0,
+      "p95_ms": 7458.0,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 1333.0,
+      "p95_ms": 1333.0,
+      "tool": "sf_get_limits"
+    }
+  ],
+  "prev_totals": {
+    "calls": 31,
+    "degraded": 0,
+    "error": 6,
+    "error_rate": 0.1935483870967742,
+    "ok": 25
+  },
+  "since": "2026-10-06T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Record 'subsidiary' was not found."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Record 'department' was not found."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Record 'classification' was not found."
+    }
+  ],
+  "totals": {
+    "calls": 19,
+    "degraded": 0,
+    "error": 3,
+    "error_rate": 0.15789473684210525,
+    "ok": 16
+  },
+  "until": "2026-10-12T20:02:51.747608+00:00"
+}
