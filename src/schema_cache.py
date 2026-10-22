@@ -14,9 +14,17 @@ Usage::
     ns_types = schema_cache.ns_list_record_types()
     ns_schema = schema_cache.ns_get_record_schema("customer")
 
+Keys that nobody reads anymore stop being background-refreshed: once a key
+has gone unaccessed for SCHEMA_CACHE_IDLE seconds it is skipped by the sweep
+(previously a single call kept its metadata API hit going every ~30 min for
+the life of the process). The stale value stays cached; the next access
+re-fetches lazily and resumes background refresh for that key.
+
 Configuration (env vars):
     SCHEMA_CACHE_TTL        – seconds before an entry is considered stale (default 3600)
     SCHEMA_CACHE_REFRESH    – seconds between background refresh sweeps (default 1800)
+    SCHEMA_CACHE_IDLE       – seconds without access before a key stops being
+                              background-refreshed (default 2× refresh interval)
 """
 
 import logging
@@ -32,11 +40,12 @@ _DEFAULT_REFRESH = 1800  # 30 minutes
 
 
 class _CacheEntry:
-    __slots__ = ("value", "fetched_at")
+    __slots__ = ("value", "fetched_at", "last_accessed")
 
     def __init__(self, value: Any, fetched_at: float) -> None:
         self.value = value
         self.fetched_at = fetched_at
+        self.last_accessed = fetched_at
 
 
 class SchemaCache:
@@ -51,11 +60,20 @@ class SchemaCache:
     the refresh is retried on the next sweep.
     """
 
-    def __init__(self, ttl: int | None = None, refresh_interval: int | None = None) -> None:
+    def __init__(
+        self,
+        ttl: int | None = None,
+        refresh_interval: int | None = None,
+        idle_after: float | None = None,
+    ) -> None:
         self._ttl = ttl or int(os.getenv("SCHEMA_CACHE_TTL", str(_DEFAULT_TTL)))
         self._refresh_interval = refresh_interval or int(
             os.getenv("SCHEMA_CACHE_REFRESH", str(_DEFAULT_REFRESH))
         )
+        if idle_after is None:
+            idle_env = os.getenv("SCHEMA_CACHE_IDLE")
+            idle_after = float(idle_env) if idle_env else 2.0 * self._refresh_interval
+        self._idle_after = idle_after
         self._lock = threading.Lock()
         self._store: dict[str, _CacheEntry] = {}
 
@@ -76,6 +94,7 @@ class SchemaCache:
         with self._lock:
             entry = self._store.get(key)
             if entry is not None and (now - entry.fetched_at) < self._ttl:
+                entry.last_accessed = now
                 return entry.value
 
         # Cache miss or stale — call through (outside the lock to avoid blocking)
@@ -104,15 +123,31 @@ class SchemaCache:
             self._refresh_all()
 
     def _refresh_all(self) -> None:
-        """Re-fetch all registered keys, keeping stale values on failure."""
+        """Re-fetch registered keys still in active use, keeping stale values on failure.
+
+        Keys unaccessed for longer than idle_after are skipped: their stale
+        value stays cached and the next access re-fetches lazily (which also
+        makes them eligible for background refresh again).
+        """
+        now = time.monotonic()
         with self._lock:
-            snapshot = dict(self._fetchers)
+            snapshot = {}
+            for key, fetcher in self._fetchers.items():
+                entry = self._store.get(key)
+                if entry is not None and (now - entry.last_accessed) >= self._idle_after:
+                    logger.debug("Schema cache key idle; skipping background refresh: %s", key)
+                    continue
+                snapshot[key] = fetcher
 
         for key, fetcher in snapshot.items():
             try:
                 value = fetcher()
                 with self._lock:
-                    self._store[key] = _CacheEntry(value, time.monotonic())
+                    prev = self._store.get(key)
+                    entry = _CacheEntry(value, time.monotonic())
+                    if prev is not None:
+                        entry.last_accessed = prev.last_accessed
+                    self._store[key] = entry
                 logger.debug("Schema cache refreshed: %s", key)
             except Exception:
                 logger.warning(
@@ -179,13 +214,17 @@ class SchemaCache:
             entries = {}
             for key, entry in self._store.items():
                 age = now - entry.fetched_at
+                idle = now - entry.last_accessed
                 entries[key] = {
                     "age_seconds": round(age, 1),
                     "stale": age >= self._ttl,
+                    "idle_seconds": round(idle, 1),
+                    "background_refresh": idle < self._idle_after,
                 }
             return {
                 "ttl": self._ttl,
                 "refresh_interval": self._refresh_interval,
+                "idle_after": self._idle_after,
                 "entry_count": len(self._store),
                 "entries": entries,
             }
