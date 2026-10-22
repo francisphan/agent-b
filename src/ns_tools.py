@@ -19,12 +19,18 @@ def register_tools(mcp):
         """Execute a SuiteQL query against NetSuite and return matching records.
 
         Key tables: customer, transaction (filter by type: SalesOrd, CustInvc, etc.),
-        transactionline, item, vendor, employee, contact.
+        transactionline, item, vendor, contact.
 
         Column gotchas (these differ from the REST field names and 400 otherwise):
         the row id is 'id' (NOT 'internalid'); customer has no 'name' column (use
         entityid / companyname / firstname / lastname); customer balance is
         'balancesearch' / 'overduebalancesearch' (NOT 'balance').
+
+        NOT queryable in this account (rejected pre-flight, no SQL shape works):
+        metadata tables (customfield, customrecordtype — use ns_get_record_schema /
+        ns_list_record_types instead) and role-blocked tables (employee, customlist*,
+        customercategory, classification, supportcategory — resolve references to
+        display text with BUILTIN.DF() instead, e.g. BUILTIN.DF(c.salesrep)).
 
         Row limiting: SuiteQL is Oracle SQL and does NOT support the MySQL-style
         'LIMIT n' clause. To cap rows, either write 'FETCH FIRST n ROWS ONLY'
@@ -57,11 +63,12 @@ def register_tools(mcp):
         query, rewrite_note = rewrite_suiteql_limit(query)
 
         # Pre-flight validation. Only findings the validator marks blocking (a
-        # SQL LIMIT clause, which SuiteQL always rejects) short-circuit here so
-        # the actionable message reaches the caller instead of a raw NetSuite
-        # 400. Everything else (e.g. an unextractable FROM clause) stays
-        # advisory and the query still executes — the validator is regex-based
-        # and can be wrong about unusual-but-valid SQL.
+        # SQL LIMIT clause, or a table that is certain to 400 in this
+        # account/role) short-circuit here so the actionable message reaches
+        # the caller instead of a raw NetSuite 400. Everything else (e.g. an
+        # unextractable FROM clause) stays advisory and the query still
+        # executes — the validator is regex-based and can be wrong about
+        # unusual-but-valid SQL.
         validation = validate_suiteql(query)
         if rewrite_note:
             validation["warnings"].append(rewrite_note)

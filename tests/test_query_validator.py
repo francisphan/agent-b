@@ -102,6 +102,51 @@ class TestValidateSuiteql:
         assert result["valid"] is True
         assert result["warnings"] == []
 
+    def test_metadata_table_blocks(self):
+        # The exact production failure (issue #51): querying customrecordtype
+        # always 400s (legacy search engine — restricted identifiers, no FETCH).
+        result = validate_suiteql(
+            "SELECT customtype, id FROM customrecordtype FETCH FIRST 20 ROWS ONLY"
+        )
+        assert result["valid"] is False
+        assert result["blocking"] is True
+        assert any("legacy search engine" in w for w in result["warnings"])
+        assert any("ns_get_record_schema" in s for s in result["suggestions"])
+
+    def test_customfield_blocks(self):
+        result = validate_suiteql("SELECT id, label FROM customfield")
+        assert result["blocking"] is True
+
+    def test_ungranted_table_blocks_with_builtin_df_suggestion(self):
+        result = validate_suiteql("SELECT id, name FROM customlist")
+        assert result["blocking"] is True
+        assert any("not queryable by this integration role" in w for w in result["warnings"])
+        assert any("BUILTIN.DF" in s for s in result["suggestions"])
+
+    def test_customlist_prefixed_table_blocks(self):
+        result = validate_suiteql("SELECT id FROM customlist_wine_regions")
+        assert result["blocking"] is True
+
+    def test_employee_blocks(self):
+        # Verified live: SuiteQL and REST both return "Record 'employee' was
+        # not found" for this role.
+        result = validate_suiteql("SELECT id, entityid FROM employee WHERE isinactive = 'F'")
+        assert result["blocking"] is True
+
+    def test_join_to_blocked_table_blocks(self):
+        result = validate_suiteql(
+            "SELECT c.id FROM customer c JOIN classification cl ON c.class = cl.id"
+        )
+        assert result["blocking"] is True
+
+    def test_builtin_df_on_normal_table_not_blocked(self):
+        # The recommended alternative must itself pass validation.
+        result = validate_suiteql(
+            "SELECT id, entityid, BUILTIN.DF(salesrep) AS sales_rep "
+            "FROM customer WHERE salesrep IS NOT NULL"
+        )
+        assert result["blocking"] is False
+
     def test_limit_keyword_rejected(self):
         # The exact production failure: an LLM appended a MySQL-style LIMIT clause.
         result = validate_suiteql(
