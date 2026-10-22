@@ -202,45 +202,81 @@ SCHEMA: dict[str, dict] = {
         "label": "Item (Product)",
         "description": (
             "Products including wines, experiences, and services. "
-            "Various subtypes: inventoryItem, nonInventoryItem, serviceItem, etc. "
-            "SuiteQL table is 'item' which unions all subtypes."
+            "SuiteQL table is 'item', which unions all subtypes — the subtype "
+            "discriminator column is 'itemtype' (InvtPart, NonInvtPart, Assembly, "
+            "Service, Expense, ...). REST access is polymorphic: there is no "
+            "generic 'item' REST endpoint, each record must be fetched as its "
+            "actual subtype (inventoryItem, lotNumberedAssemblyItem, kitItem, "
+            'serviceSaleItem, ...) or the call 400s with "has a different '
+            'type". Resolve the subtype first via SuiteQL: '
+            "SELECT id, itemtype FROM item WHERE id = <id>."
         ),
         "rest_type": "inventoryItem",
+        "rest_type_note": (
+            "Default for plain inventory items only — use the record's actual "
+            "subtype per its 'itemtype' (e.g. InvtPart -> inventoryItem, "
+            "Assembly -> assemblyItem, Service -> serviceSaleItem); "
+            "ns_list_record_types() has the full REST name list."
+        ),
         "key_fields": [
             {"name": "id", "type": "integer"},
             {"name": "itemId", "type": "string", "note": "Display name / SKU"},
             {"name": "displayName", "type": "string"},
             {"name": "description", "type": "string"},
             {
-                "name": "type",
+                "name": "itemtype",
                 "type": "string",
-                "note": "Item type (Inventory, NonInventory, Service, etc.)",
+                "note": "Subtype code: InvtPart, NonInvtPart, Assembly, Service, "
+                "Expense, ... ('type' is NOT a column on item — it 400s with "
+                '"Unknown identifier").',
             },
-            {"name": "basePrice", "type": "currency"},
             {"name": "cost", "type": "currency"},
             {
-                "name": "quantityAvailable",
+                "name": "totalquantityonhand",
                 "type": "number",
-                "note": "Stock on hand (inventory items)",
+                "note": "Stock on hand across locations. 'quantityavailable' and "
+                "'quantityonorder' are NOT SuiteQL columns on item (they 400); "
+                "per-location availability lives in aggregateitemlocation.",
             },
-            {"name": "quantityOnOrder", "type": "number"},
             {"name": "isInactive", "type": "boolean"},
             {"name": "parent", "type": "reference", "note": "Parent item (for matrix items)"},
             {"name": "class", "type": "reference", "note": "Classification"},
         ],
         "suiteql_table": "item",
+        "suiteql_fields": [
+            "id",
+            "itemid",
+            "displayname",
+            "description",
+            "itemtype",
+            "cost",
+            "totalquantityonhand",
+            "isinactive",
+            "parent",
+            "class",
+        ],
+        "pricing_note": (
+            "Prices are NOT on item — 'baseprice' 400s with \"Unknown identifier\". "
+            "Join the 'pricing' table (columns: item, pricelevel, unitprice) instead."
+        ),
         "example_suiteql": [
             (
-                "SELECT id, itemid, displayname, description, type, baseprice "
+                "SELECT id, itemid, displayname, description, itemtype "
                 "FROM item "
                 "WHERE isinactive = 'F' "
                 "ORDER BY itemid"
             ),
             (
-                "SELECT id, itemid, displayname, quantityavailable, quantityonorder "
+                "SELECT id, itemid, displayname, totalquantityonhand "
                 "FROM item "
-                "WHERE type = 'InvtPart' AND quantityavailable > 0 "
-                "ORDER BY quantityavailable DESC"
+                "WHERE itemtype = 'InvtPart' AND totalquantityonhand > 0 "
+                "ORDER BY totalquantityonhand DESC"
+            ),
+            (
+                "SELECT i.id, i.itemid, p.pricelevel, p.unitprice "
+                "FROM item i "
+                "JOIN pricing p ON p.item = i.id "
+                "WHERE i.isinactive = 'F'"
             ),
         ],
     },
@@ -409,6 +445,14 @@ GLOBAL_TIPS: list[str] = [
     'fieldname 400 with "Unknown identifier", and FETCH FIRST is a syntax '
     "error there. Use ns_get_record_schema / ns_list_record_types for field and "
     "record-type metadata instead of SuiteQL.",
+    "item columns: the subtype discriminator is 'itemtype' (InvtPart, "
+    "NonInvtPart, Assembly, Service, Expense, ...) — 'type' is not a column on "
+    "item. Stock on hand is 'totalquantityonhand' ('quantityavailable' and "
+    "'quantityonorder' are not columns). Prices are not on item at all "
+    "('baseprice' 400s) — join 'pricing' (item, pricelevel, unitprice). "
+    "Gotcha: in a query that also has FETCH FIRST, an unknown column surfaces "
+    'as a misleading "syntax error ... near: FETCH" instead of "Unknown '
+    'identifier" — check column names before blaming the FETCH syntax.',
     "customer has NO address columns — city/state/country are not on the table "
     "(they 400 or 500), and the address sub-tables (customeraddressbook / "
     "customeraddressbookentityaddress) return zero rows for this read-only "
