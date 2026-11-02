@@ -1,0 +1,191 @@
+{
+  "auth_split": {
+    "none": 8,
+    "write": 21
+  },
+  "days": 7,
+  "generated_at": "2026-11-02T20:33:57.550380+00:00",
+  "per_client": [
+    {
+      "calls": 21,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 3,
+      "top_tools": [
+        {
+          "calls": 8,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 5,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 5,
+          "tool": "sf_soql_query"
+        }
+      ]
+    },
+    {
+      "calls": 4,
+      "client": "s2s-read",
+      "degraded": 0,
+      "errors": 2,
+      "top_tools": [
+        {
+          "calls": 4,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 4,
+      "client": "christian.stoddart@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_get_schema"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-10-27": 4,
+    "2026-10-28": 4,
+    "2026-10-29": 4,
+    "2026-10-30": 9,
+    "2026-10-31": 8
+  },
+  "per_end_user": [
+    {
+      "calls": 20,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 7,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 5,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 5,
+          "tool": "sf_soql_query"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "U0C6BAD50B1",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 12,
+      "degraded": 0,
+      "errors": 3,
+      "p50_ms": 746.5,
+      "p95_ms": 8530.349999999993,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 8,
+      "degraded": 0,
+      "errors": 2,
+      "p50_ms": 351.0,
+      "p95_ms": 6417.950000000001,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 5,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2750.0,
+      "p95_ms": 4390.599999999999,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 3044.0,
+      "p95_ms": 3044.0,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "sf_get_schema"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 1343.0,
+      "p95_ms": 1343.0,
+      "tool": "sf_describe_object"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 441.0,
+      "p95_ms": 441.0,
+      "tool": "sf_search"
+    }
+  ],
+  "prev_totals": {
+    "calls": 116,
+    "degraded": 0,
+    "error": 7,
+    "error_rate": 0.0603448275862069,
+    "ok": 109
+  },
+  "since": "2026-10-27T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Record 'subsidiary' was not found."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Record 'department' was not found."
+    },
+    {
+      "count": 1,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Unknown identifier 'addr1'. Available identifiers are: {customer=customer}."
+    },
+    {
+      "count": 1,
+      "error": "Malformed request https://thevinesofmendoza2.my.salesforce.com/services/data/v59.0/query/?q=SELECT+Id%2C+Name%2C+PersonEmail%2C+Current_Services__pc+FROM+Account+WHERE+IsPersonAccount+%3D+true+AND+Current_Services__pc+LIKE+%27%25Villa%25%27+ORDER+BY+Name+ASC+LIMIT+200. Response content: [{'message':\u2026 (+476 chars)"
+    },
+    {
+      "count": 1,
+      "error": "Malformed request https://thevinesofmendoza2.my.salesforce.com/services/data/v59.0/query/?q=SELECT+Id%2C+Name%2C+Account.Name%2C+Account.PersonEmail%2C+StageName%2C+CloseDate+FROM+Opportunity+WHERE+IsWon+%3D+true+AND+%28Name+LIKE+%27%25TVOM+Villa%25%27+OR+Name+LIKE+%27%25TVOM+Villas%25%27+OR+Name+LI\u2026 (+379 chars)"
+    }
+  ],
+  "totals": {
+    "calls": 29,
+    "degraded": 0,
+    "error": 5,
+    "error_rate": 0.1724137931034483,
+    "ok": 24
+  },
+  "until": "2026-11-02T20:33:57.550380+00:00"
+}
