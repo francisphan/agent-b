@@ -1,0 +1,12 @@
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: agent-b
+spec:
+  healthCheck:
+    type: HTTP
+    requestPath: /health
+    port: 8000
+  # MCP streams responses (streamable-http / SSE); the load balancer's 30s
+  # default would cut long tool calls and open streams.
+  timeoutSec: 3600

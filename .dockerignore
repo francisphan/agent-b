@@ -1,0 +1,15 @@
+# Keep secrets and local state out of the build context. The Dockerfile only
+# COPYs pyproject.toml, src/ and start.sh, but the whole context is still sent
+# to the builder (and to Cloud Build / remote builders).
+.env
+.token_cache.json
+.git
+.venv
+.cache
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+deploy
+tests
+usage-reports

@@ -18,3 +18,9 @@ scripts/*
 CLAUDE.md
 .cache/
 tool_usage.jsonl
+# Terraform (deploy/terraform)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
