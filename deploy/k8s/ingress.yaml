@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agent-b
+  annotations:
+    kubernetes.io/ingress.class: gce
+    # Reserved by Terraform (google_compute_global_address.ingress).
+    kubernetes.io/ingress.global-static-ip-name: agent-b-ip
+    networking.gke.io/managed-certificates: agent-b
+    # HTTPS only: bearer tokens must never cross the wire in clear text.
+    kubernetes.io/ingress.allow-http: "false"
+spec:
+  rules:
+    - host: agent-b.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: agent-b
+                port:
+                  name: http
