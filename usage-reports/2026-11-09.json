@@ -1,0 +1,288 @@
+{
+  "auth_split": {
+    "none": 84,
+    "write": 32
+  },
+  "days": 7,
+  "generated_at": "2026-11-09T21:11:08.679000+00:00",
+  "per_client": [
+    {
+      "calls": 84,
+      "client": "s2s-read",
+      "degraded": 0,
+      "errors": 15,
+      "top_tools": [
+        {
+          "calls": 66,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 7,
+          "tool": "ns_get_record_schema"
+        },
+        {
+          "calls": 7,
+          "tool": "sf_soql_query"
+        }
+      ]
+    },
+    {
+      "calls": 32,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 10,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 9,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 4,
+          "tool": "ns_rest_get"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-11-03": 2,
+    "2026-11-04": 15,
+    "2026-11-05": 1,
+    "2026-11-06": 5,
+    "2026-11-07": 84,
+    "2026-11-09": 9
+  },
+  "per_end_user": [
+    {
+      "calls": 9,
+      "end_user": "U0AKA4Q68AH",
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 3,
+          "tool": "ns_rest_get"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 8,
+      "end_user": "U0C6BAD50B1",
+      "top_tools": [
+        {
+          "calls": 5,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "wine_owner_lookup"
+        },
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 5,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 5,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 5,
+      "end_user": "U0VG1L71Q",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "sf_find_by_email"
+        },
+        {
+          "calls": 1,
+          "tool": "guest_360_profile"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        }
+      ]
+    },
+    {
+      "calls": 4,
+      "end_user": "U05F1FRTA5V",
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 1,
+      "end_user": "U08KWHQUY0Y",
+      "top_tools": [
+        {
+          "calls": 1,
+          "tool": "person_brief"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 76,
+      "degraded": 0,
+      "errors": 15,
+      "p50_ms": 1542.5,
+      "p95_ms": 11654.75,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 9,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2390.0,
+      "p95_ms": 5160.4,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 9,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 262.0,
+      "p95_ms": 3061.5999999999985,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 7,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 291.0,
+      "p95_ms": 1056.1999999999998,
+      "tool": "ns_get_record_schema"
+    },
+    {
+      "calls": 4,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2406.0,
+      "p95_ms": 3416.45,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 772.0,
+      "p95_ms": 854.8,
+      "tool": "sf_find_by_email"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2624.0,
+      "p95_ms": 3212.6,
+      "tool": "guest_360_profile"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 904.0,
+      "p95_ms": 1024.6,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 27807.5,
+      "p95_ms": 52833.35,
+      "tool": "ns_list_record_types"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 9702.0,
+      "p95_ms": 9702.0,
+      "tool": "wine_owner_lookup"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "ns_get_netsuite_schema"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 1265.0,
+      "p95_ms": 1265.0,
+      "tool": "sf_describe_object"
+    }
+  ],
+  "prev_totals": {
+    "calls": 30,
+    "degraded": 0,
+    "error": 5,
+    "error_rate": 0.16666666666666666,
+    "ok": 25
+  },
+  "since": "2026-11-03T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 6,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Invalid or unsupported search."
+    },
+    {
+      "count": 2,
+      "error": "Bad Request: Invalid limit and offset values. The offset 1 must be divisible by the page limit 5."
+    },
+    {
+      "count": 1,
+      "error": "Internal Server Error: An unexpected error occurred. Error ID: mw6us48l17u22u480nu0h"
+    },
+    {
+      "count": 1,
+      "error": "Internal Server Error: An unexpected error occurred. Error ID: mw6usf20k3pzfsxruhlg"
+    },
+    {
+      "count": 1,
+      "error": "Internal Server Error: An unexpected error occurred. Error ID: mw6uu1g516ptlmjwc4n1y"
+    }
+  ],
+  "totals": {
+    "calls": 116,
+    "degraded": 0,
+    "error": 15,
+    "error_rate": 0.12931034482758622,
+    "ok": 101
+  },
+  "until": "2026-11-09T21:11:08.679000+00:00"
+}
