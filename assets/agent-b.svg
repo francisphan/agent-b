@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs><clipPath id="c"><circle cx="256" cy="256" r="252"/></clipPath></defs>
+  <circle cx="256" cy="256" r="252" fill="#5A4A86"/>
+  <g clip-path="url(#c)" stroke-linejoin="round">
+    <!-- black suit -->
+    <path d="M96,520 C116,446 168,404 256,398 C344,404 396,446 416,520 Z" fill="#1E2029"/>
+    <!-- white shirt and lapels -->
+    <path d="M212,402 L256,482 L300,402 Z" fill="#F7F3EC"/>
+    <path d="M212,402 L180,420 L240,500 L256,482 Z" fill="#2C2F3B"/>
+    <path d="M300,402 L332,420 L272,500 L256,482 Z" fill="#2C2F3B"/>
+    <!-- red tie -->
+    <path d="M244,404 L268,404 L264,424 L248,424 Z" fill="#B01E26"/>
+    <path d="M248,424 L264,424 L274,492 L256,512 L238,492 Z" fill="#D62830"/>
+    <!-- ears -->
+    <path d="M146,214 L150,64 L238,150 Z" fill="#3A2A20" stroke="#3A2A20" stroke-width="20"/>
+    <path d="M366,214 L362,64 L274,150 Z" fill="#3A2A20" stroke="#3A2A20" stroke-width="20"/>
+    <path d="M166,178 L166,104 L216,152 Z" fill="#C68A4E" stroke="#C68A4E" stroke-width="10"/>
+    <path d="M346,178 L346,104 L296,152 Z" fill="#C68A4E" stroke="#C68A4E" stroke-width="10"/>
+    <!-- head -->
+    <path d="M178,146 L334,146 L392,222 L386,296 L300,394 L212,394 L126,296 L120,222 Z" fill="#C68A4E" stroke="#C68A4E" stroke-width="18"/>
+    <!-- dark stripe down the forehead, as on a shepherd -->
+    <path d="M226,146 L286,146 L272,214 L240,214 Z" fill="#3A2A20" stroke="#3A2A20" stroke-width="10"/>
+    <!-- cream muzzle -->
+    <path d="M256,236 Q290,240 306,290 L314,346 Q300,392 256,394 Q212,392 198,346 L206,290 Q222,240 256,236 Z" fill="#F7F3EC" stroke="#F7F3EC" stroke-width="8"/>
+    <!-- nose and a little smirk -->
+    <path d="M232,296 L280,296 L256,326 Z" fill="#1E2029" stroke="#1E2029" stroke-width="10"/>
+    <path d="M256,328 L256,346" stroke="#1E2029" stroke-width="7" stroke-linecap="round"/>
+    <path d="M256,346 Q276,358 294,342" fill="none" stroke="#1E2029" stroke-width="7" stroke-linecap="round"/>
+    <!-- dark glasses -->
+    <path d="M150,212 L362,212" stroke="#1E2029" stroke-width="10" stroke-linecap="round"/>
+    <path d="M160,214 L242,214 Q246,262 210,268 Q168,270 160,236 Z" fill="#1E2029" stroke="#1E2029" stroke-width="6"/>
+    <path d="M352,214 L270,214 Q266,262 302,268 Q344,270 352,236 Z" fill="#1E2029" stroke="#1E2029" stroke-width="6"/>
+    <path d="M178,226 L198,226" stroke="#5C6070" stroke-width="7" stroke-linecap="round"/>
+    <path d="M290,226 L310,226" stroke="#5C6070" stroke-width="7" stroke-linecap="round"/>
+    <!-- earpiece with a coiled cord down to the collar -->
+    <circle cx="132" cy="262" r="13" fill="#1E2029"/>
+    <path d="M132,274 C118,288 146,296 132,310 C118,324 146,332 132,346 C118,360 146,368 132,382 C124,392 150,404 176,412" fill="none" stroke="#C9CED8" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>
