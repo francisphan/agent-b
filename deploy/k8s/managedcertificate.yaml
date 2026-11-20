@@ -1,0 +1,8 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: agent-b
+spec:
+  domains:
+    # Must match the host in OAUTH_PUBLIC_URL and the Ingress rule.
+    - agent-b.example.com

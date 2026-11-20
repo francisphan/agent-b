@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-b
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "agent-b"}'
+spec:
+  type: ClusterIP
+  selector:
+    app: agent-b
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-b
+  labels:
+    app: agent-b
+spec:
+  # One replica: the usage-log volume is ReadWriteOnce, so the old pod must
+  # stop before the new one mounts it (Recreate, not RollingUpdate).
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: agent-b
+  template:
+    metadata:
+      labels:
+        app: agent-b
+    spec:
+      containers:
+        - name: agent-b
+          image: agent-b # set by kustomization.yaml `images:`
+          ports:
+            - name: http
+              containerPort: 8000
+          # All app config and credentials (SF_*, NETSUITE_*, MCP_*, OAUTH_*,
+          # REDIS_URL, OPERA_*, TS_AUTHKEY, ...). Created out of band — see
+          # deploy/README.md. Never committed.
+          envFrom:
+            - secretRef:
+                name: agent-b-env
+          env:
+            - name: TOOL_USAGE_LOG
+              value: /data/tool_usage.jsonl
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            # start.sh runs tailscaled in userspace-networking mode, which needs
+            # no capabilities or /dev/net/tun.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          # start.sh may spend a few seconds on `tailscale up` before uvicorn
+          # binds; give it up to 2.5 min before liveness starts counting.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: agent-b-data

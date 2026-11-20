@@ -1,0 +1,11 @@
+# Tool-usage analytics JSONL (TOOL_USAGE_LOG) — the GKE equivalent of the
+# Railway volume, so the log survives restarts and redeploys.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-b-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
