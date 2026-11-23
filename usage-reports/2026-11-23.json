@@ -1,0 +1,316 @@
+{
+  "auth_split": {
+    "none": 56,
+    "write": 40
+  },
+  "days": 7,
+  "generated_at": "2026-11-23T22:17:58.792756+00:00",
+  "per_client": [
+    {
+      "calls": 43,
+      "client": "michael@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 6,
+      "top_tools": [
+        {
+          "calls": 20,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 17,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_get_schema"
+        }
+      ]
+    },
+    {
+      "calls": 38,
+      "client": "sabueso",
+      "degraded": 0,
+      "errors": 1,
+      "top_tools": [
+        {
+          "calls": 16,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 11,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 5,
+          "tool": "sf_soql_query"
+        }
+      ]
+    },
+    {
+      "calls": 13,
+      "client": "s2s-read",
+      "degraded": 0,
+      "errors": 2,
+      "top_tools": [
+        {
+          "calls": 12,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_get_schema"
+        }
+      ]
+    },
+    {
+      "calls": 2,
+      "client": "francis.phan@vinesofmendoza.com",
+      "degraded": 0,
+      "errors": 0,
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        }
+      ]
+    }
+  ],
+  "per_day": {
+    "2026-11-17": 10,
+    "2026-11-18": 10,
+    "2026-11-19": 50,
+    "2026-11-20": 6,
+    "2026-11-21": 9,
+    "2026-11-22": 11
+  },
+  "per_end_user": [
+    {
+      "calls": 12,
+      "end_user": "U0VG1L71Q",
+      "top_tools": [
+        {
+          "calls": 7,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 3,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "ns_rest_get"
+        }
+      ]
+    },
+    {
+      "calls": 9,
+      "end_user": "U02G2MU8A",
+      "top_tools": [
+        {
+          "calls": 4,
+          "tool": "sf_soql_query"
+        },
+        {
+          "calls": 3,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        }
+      ]
+    },
+    {
+      "calls": 6,
+      "end_user": "U0BBPLUK6KV",
+      "top_tools": [
+        {
+          "calls": 3,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 1,
+          "tool": "sf_soql_query"
+        }
+      ]
+    },
+    {
+      "calls": 6,
+      "end_user": "U0C6BAD50B1",
+      "top_tools": [
+        {
+          "calls": 4,
+          "tool": "ns_suiteql_query"
+        },
+        {
+          "calls": 2,
+          "tool": "sf_search"
+        }
+      ]
+    },
+    {
+      "calls": 3,
+      "end_user": "U087HK4EKT7",
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        },
+        {
+          "calls": 1,
+          "tool": "wine_owner_lookup"
+        }
+      ]
+    },
+    {
+      "calls": 2,
+      "end_user": "UDN3L717W",
+      "top_tools": [
+        {
+          "calls": 2,
+          "tool": "person_brief"
+        }
+      ]
+    }
+  ],
+  "per_tool": [
+    {
+      "calls": 34,
+      "degraded": 0,
+      "errors": 4,
+      "p50_ms": 229.5,
+      "p95_ms": 6731.999999999999,
+      "tool": "sf_soql_query"
+    },
+    {
+      "calls": 31,
+      "degraded": 0,
+      "errors": 5,
+      "p50_ms": 857.0,
+      "p95_ms": 2600.0,
+      "tool": "ns_suiteql_query"
+    },
+    {
+      "calls": 18,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2489.5,
+      "p95_ms": 5020.699999999999,
+      "tool": "person_brief"
+    },
+    {
+      "calls": 3,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 2533.0,
+      "p95_ms": 4757.8,
+      "tool": "ns_rest_get"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "sf_get_schema"
+    },
+    {
+      "calls": 2,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 757.0,
+      "p95_ms": 1046.8,
+      "tool": "sf_search"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 10558.0,
+      "p95_ms": 10558.0,
+      "tool": "wine_owner_lookup"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "ns_get_netsuite_schema"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 667.0,
+      "p95_ms": 667.0,
+      "tool": "sf_describe_object"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "tool": "schema_cache_stats"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 1299.0,
+      "p95_ms": 1299.0,
+      "tool": "ns_get_record_schema"
+    },
+    {
+      "calls": 1,
+      "degraded": 0,
+      "errors": 0,
+      "p50_ms": 53760.0,
+      "p95_ms": 53760.0,
+      "tool": "ns_list_record_types"
+    }
+  ],
+  "prev_totals": {
+    "calls": 106,
+    "degraded": 0,
+    "error": 10,
+    "error_rate": 0.09433962264150944,
+    "ok": 96
+  },
+  "since": "2026-11-17T00:00:00+00:00",
+  "top_errors": [
+    {
+      "count": 3,
+      "error": "Bad Request: Invalid search query. Detailed unprocessed description follows. Search error occurred: Invalid or unsupported search."
+    },
+    {
+      "count": 1,
+      "error": "Malformed request https://thevinesofmendoza2.my.salesforce.com/services/data/v59.0/query/?q=SELECT+Id%2C+Name%2C+StageName%2C+Amount%2C+CloseDate%2C+Account.Name%2C+Description%2C+Product2.Name+FROM+Opportunity+WHERE+Name+LIKE+%27%25lot+69%25%27+OR+Description+LIKE+%27%25lot+69%25%27+OR+Name+LIKE+%2\u2026 (+475 chars)"
+    },
+    {
+      "count": 1,
+      "error": "Error Code 431. Response content: <html>\n<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\n<title>Error 431 Request Header Fields Too Large</title>\n</head>\n<body>\n<h2>HTTP ERROR 431 Request Header Fields Too Large</h2>\n<table>\n<tr><th>URI:</th><td>"
+    },
+    {
+      "count": 1,
+      "error": "Malformed request https://thevinesofmendoza2.my.salesforce.com/services/data/v59.0/query/?q=SELECT+RecordType.Name+rt%2C+Type+t%2C+IsWon+w%2C+COUNT%28Id%29+cnt%2C+MIN%28CloseDate%29+mn%2C+MAX%28CloseDate%29+mx+FROM+Opportunity+GROUP+BY+RecordType.Name%2C+Type%2C+IsWon+ORDER+BY+COUNT%28Id%29+DESC. Re\u2026 (+391 chars)"
+    },
+    {
+      "count": 1,
+      "error": "Malformed request https://thevinesofmendoza2.my.salesforce.com/services/data/v59.0/query/?q=SELECT+TVG__c%2C+COUNT%28Id%29+cnt%2C+MIN%28Check_In_Date__c%29+mn%2C+MAX%28Check_In_Date__c%29+mx%2C+COUNT%28Contact__c%29+con%2C+COUNT%28Check_Out_Date__c%29+withOut+FROM+TVRS_Guest__c+GROUP+BY+TVG__c. Resp\u2026 (+251 chars)"
+    }
+  ],
+  "totals": {
+    "calls": 96,
+    "degraded": 0,
+    "error": 9,
+    "error_rate": 0.09375,
+    "ok": 87
+  },
+  "until": "2026-11-23T22:17:58.792756+00:00"
+}
